@@ -1,0 +1,1536 @@
+{
+  "version": 2,
+  "modules": [
+    {
+      "id": "home",
+      "title": "الرئيسية",
+      "icon": "ر",
+      "items": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "sales",
+      "title": "المبيعات والكاشير",
+      "icon": "ب",
+      "items": [
+        "pos",
+        "sales-management",
+        "delivery-orders",
+        "drivers-management"
+      ]
+    },
+    {
+      "id": "inventory",
+      "title": "الأصناف والمخزون",
+      "icon": "خ",
+      "items": [
+        "products-list",
+        "warehouses-list"
+      ]
+    },
+    {
+      "id": "purchases",
+      "title": "المشتريات",
+      "icon": "ش",
+      "items": [
+        "purchase-management",
+        "purchases-list"
+      ]
+    },
+    {
+      "id": "suppliers",
+      "title": "الموردون",
+      "icon": "م",
+      "items": [
+        "suppliers-list",
+        "supplier-payment"
+      ]
+    },
+    {
+      "id": "customers",
+      "title": "العملاء",
+      "icon": "ع",
+      "items": [
+        "customers-list",
+        "customer-statement"
+      ]
+    },
+    {
+      "id": "payment-methods",
+      "title": "وسائل الدفع",
+      "icon": "د",
+      "items": [
+        "payment-overview",
+        "payment-wallets",
+        "payment-terminals",
+        "payment-history"
+      ]
+    },
+    {
+      "id": "treasury",
+      "title": "الخزنة والبنك",
+      "icon": "ن",
+      "items": [
+        "accounts-list",
+        "account-deposit",
+        "account-withdraw"
+      ]
+    },
+    {
+      "id": "expenses",
+      "title": "المصروفات والسندات",
+      "icon": "ص",
+      "items": [
+        "expenses-list",
+        "expense-add"
+      ]
+    },
+    {
+      "id": "returns",
+      "title": "المرتجعات",
+      "icon": "ر",
+      "items": [
+        "returns-overview"
+      ]
+    },
+    {
+      "id": "alerts",
+      "title": "التنبيهات",
+      "icon": "ت",
+      "items": [
+        "alerts-list"
+      ]
+    },
+    {
+      "id": "employees",
+      "title": "إدارة الموظفين",
+      "icon": "و",
+      "items": [
+        "employees-list",
+        "employee-payroll",
+        "employee-advances",
+        "attendance",
+        "shifts-list",
+        "shift-add"
+      ]
+    },
+    {
+      "id": "reports",
+      "title": "التقارير",
+      "icon": "ح",
+      "items": [
+        "report-overview"
+      ]
+    },
+    {
+      "id": "installments",
+      "title": "التقسيط",
+      "icon": "ق",
+      "items": [
+        "installment-system",
+        "installment-payment"
+      ]
+    },
+    {
+      "id": "maintenance",
+      "title": "الصيانة",
+      "icon": "ف",
+      "items": [
+        "maintenance-intake",
+        "maintenance-tracking"
+      ]
+    },
+    {
+      "id": "branches",
+      "title": "الفروع والخدمات",
+      "icon": "ف",
+      "items": [
+        "branches-list",
+        "branch-stock-transfer",
+        "branch-finance",
+        "cash-services"
+      ]
+    }
+  ],
+  "quickAccess": [
+    {
+      "route": "pos",
+      "label": "الكاشير اللمسي",
+      "icon": "▣",
+      "accent": true
+    },
+    {
+      "route": "product-quick-add",
+      "label": "إضافة سريعة للأصناف",
+      "icon": "+"
+    },
+    {
+      "route": "purchase-management",
+      "label": "فاتورة شراء"
+    },
+    {
+      "route": "customers-list",
+      "label": "إدارة العملاء"
+    },
+    {
+      "route": "warehouses-list",
+      "label": "دليل المخازن"
+    },
+    {
+      "route": "returns-overview",
+      "label": "المرتجعات",
+      "icon": "↶"
+    },
+    {
+      "route": "accounts-list",
+      "label": "الخزنة"
+    },
+    {
+      "route": "alerts-list",
+      "label": "التنبيهات",
+      "icon": "!"
+    }
+  ],
+  "screens": [
+    {
+      "route": "report-customers",
+      "reportCategory": "العملاء",
+      "reportKeywords": "ديون ذمم مديونية تحصيلات",
+      "implemented": true,
+      "title": "تقرير العملاء والمديونيات",
+      "module": "التقارير",
+      "description": "تقارير تشغيلية من السجلات المحفوظة.",
+      "renderer": "operational-reports"
+    },
+    {
+      "route": "report-suppliers",
+      "reportCategory": "الموردون",
+      "reportKeywords": "مستحقات ذمم مدفوعات",
+      "implemented": true,
+      "title": "تقرير الموردين والمستحقات",
+      "module": "التقارير",
+      "description": "تقارير تشغيلية من السجلات المحفوظة.",
+      "renderer": "operational-reports"
+    },
+    {
+      "route": "report-shifts",
+      "reportCategory": "الموظفون",
+      "implemented": true,
+      "title": "تقرير الورديات والكاشير",
+      "module": "التقارير",
+      "description": "تقارير تشغيلية من السجلات المحفوظة.",
+      "renderer": "operational-reports",
+      "featureKey": "advanced-shifts"
+    },
+    {
+      "route": "report-attendance",
+      "reportCategory": "الموظفون",
+      "implemented": true,
+      "title": "تقرير الموظفين والحضور",
+      "module": "التقارير",
+      "description": "تقارير تشغيلية من السجلات المحفوظة.",
+      "renderer": "operational-reports",
+      "featureKey": "employee-attendance"
+    },
+    {
+      "route": "report-maintenance",
+      "reportCategory": "الوحدات الإضافية",
+      "implemented": true,
+      "title": "تقرير الصيانة",
+      "module": "التقارير",
+      "description": "تقارير تشغيلية من السجلات المحفوظة.",
+      "renderer": "operational-reports",
+      "featureKey": "maintenance-management"
+    },
+    {
+      "route": "report-installments",
+      "reportCategory": "الوحدات الإضافية",
+      "implemented": true,
+      "title": "تقرير التقسيط",
+      "module": "التقارير",
+      "description": "تقارير تشغيلية من السجلات المحفوظة.",
+      "renderer": "operational-reports",
+      "featureKey": "installments"
+    },
+    {
+      "route": "report-overview",
+      "implemented": true,
+      "title": "التقارير",
+      "module": "التقارير",
+      "description": "التقارير والإحصائيات ونظرة شاملة على أداء النشاط التجاري.",
+      "renderer": "reports-center"
+    },
+    {
+      "route": "report-purchases",
+      "reportCategory": "المشتريات",
+      "reportKeywords": "شراء فواتير موردين",
+      "implemented": true,
+      "module": "التقارير",
+      "title": "تقرير المشتريات",
+      "description": "تقارير المستندات والمدفوعات المحفوظة.",
+      "renderer": "transaction-reports"
+    },
+    {
+      "route": "report-returns",
+      "reportCategory": "المرتجعات",
+      "reportKeywords": "إرجاع استرجاع رد",
+      "implemented": true,
+      "module": "التقارير",
+      "title": "تقرير المرتجعات",
+      "description": "تقارير المستندات والمدفوعات المحفوظة.",
+      "renderer": "transaction-reports"
+    },
+    {
+      "route": "report-payment-methods",
+      "reportCategory": "الخزنة والبنك",
+      "reportKeywords": "نقد محافظ بطاقات آجل قبض",
+      "implemented": true,
+      "module": "التقارير",
+      "title": "تقرير وسائل الدفع",
+      "description": "تقارير المستندات والمدفوعات المحفوظة.",
+      "renderer": "transaction-reports"
+    },
+    {
+      "route": "report-product-profit",
+      "reportCategory": "الأصناف والمخزون",
+      "reportKeywords": "هامش تكلفة ربح",
+      "implemented": true,
+      "module": "التقارير",
+      "title": "تقرير أرباح المنتجات",
+      "description": "تقارير محفوظة من قاعدة البيانات.",
+      "renderer": "stock-reports"
+    },
+    {
+      "route": "report-inventory-valuation",
+      "reportCategory": "الأصناف والمخزون",
+      "implemented": true,
+      "module": "التقارير",
+      "title": "تقرير تقييم المخزون",
+      "description": "تقارير محفوظة من قاعدة البيانات.",
+      "renderer": "stock-reports"
+    },
+    {
+      "route": "report-top-products",
+      "reportCategory": "الأصناف والمخزون",
+      "implemented": true,
+      "module": "التقارير",
+      "title": "المنتجات الأكثر مبيعًا",
+      "description": "تقارير محفوظة من قاعدة البيانات.",
+      "renderer": "stock-reports"
+    },
+    {
+      "route": "report-low-stock",
+      "reportCategory": "الأصناف والمخزون",
+      "implemented": true,
+      "module": "التقارير",
+      "title": "تقرير نواقص المخزون",
+      "description": "تقارير محفوظة من قاعدة البيانات.",
+      "renderer": "stock-reports"
+    },
+    {
+      "route": "report-inventory-movements",
+      "reportCategory": "الأصناف والمخزون",
+      "implemented": true,
+      "module": "التقارير",
+      "title": "تقرير حركة المخزون",
+      "description": "تقارير محفوظة من قاعدة البيانات.",
+      "renderer": "stock-reports"
+    },
+    {
+      "route": "report-net-profit",
+      "reportCategory": "المبيعات",
+      "reportKeywords": "الربح المصروفات صافي",
+      "implemented": true,
+      "module": "التقارير",
+      "title": "تقرير صافي الأرباح",
+      "description": "صافي ربح المبيعات بعد المصروفات المسجلة.",
+      "renderer": "net-profit-report"
+    },
+    {
+      "route": "report-expenses",
+      "reportCategory": "المصروفات",
+      "reportKeywords": "سندات إنفاق",
+      "implemented": true,
+      "module": "التقارير",
+      "title": "تقرير المصروفات",
+      "description": "سندات المصروفات المسجلة.",
+      "renderer": "expense-report"
+    },
+    {
+      "route": "report-sales",
+      "reportCategory": "المبيعات",
+      "reportKeywords": "بيع فواتير كاشير",
+      "implemented": true,
+      "module": "التقارير",
+      "title": "تقرير المبيعات",
+      "description": "الفواتير المنشورة والمرتجعات والإلغاءات المسجلة.",
+      "renderer": "sales-report"
+    },
+    {
+      "route": "payment-overview",
+      "implemented": true,
+      "module": "وسائل الدفع",
+      "title": "نظرة عامة",
+      "description": "ملخص تشغيلي لقنوات الدفع النشطة والمدفوعات وآخر العمليات المسجلة.",
+      "renderer": "payment-methods",
+      "administratorOnly": true
+    },
+    {
+      "route": "payment-wallets",
+      "implemented": true,
+      "module": "وسائل الدفع",
+      "title": "المحافظ الإلكترونية",
+      "description": "إدارة المحافظ الإلكترونية المتاحة للبيع ومراجعة نشاطها المسجل.",
+      "renderer": "payment-methods",
+      "administratorOnly": true
+    },
+    {
+      "route": "payment-terminals",
+      "implemented": true,
+      "module": "وسائل الدفع",
+      "title": "ماكينات الفيزا",
+      "description": "إدارة ماكينات البطاقات والبنوك المرتبطة ومراجعة نشاطها المسجل.",
+      "renderer": "payment-methods",
+      "administratorOnly": true
+    },
+    {
+      "route": "payment-history",
+      "implemented": true,
+      "module": "وسائل الدفع",
+      "title": "سجل العمليات",
+      "description": "بحث ومراجعة مدفوعات الفواتير حسب التاريخ والكاشير والوسيلة والحالة.",
+      "renderer": "payment-methods",
+      "administratorOnly": true
+    },
+    {
+      "route": "product-labels",
+      "implemented": true,
+      "module": "المخازن",
+      "title": "طباعة ملصقات المنتجات",
+      "description": "دفعة ملصقات من بيانات المنتجات والمتغيرات المحفوظة؛ دخول سياقي من دليل المنتجات.",
+      "renderer": "product-labels",
+      "featureKey": "barcode-label-printing",
+      "navigationHidden": true,
+      "permissionRoute": "products-list"
+    },
+    {
+      "route": "dashboard",
+      "implemented": true,
+      "module": "الرئيسية",
+      "title": "الرئيسية",
+      "description": "وصول مباشر إلى أقسام العمل التي تحفظ بيانات فعلية.",
+      "renderer": "dashboard",
+      "verified": "automated"
+    },
+    {
+      "route": "settings-program",
+      "implemented": true,
+      "module": "الإعدادات",
+      "title": "الإعدادات",
+      "description": "مركز موحد لإعدادات النظام والمستخدمين والتشغيل والبيانات.",
+      "renderer": "settings-hub",
+      "administratorOnly": true
+    },
+    {
+      "route": "feature-management",
+      "implemented": true,
+      "module": "الإعدادات",
+      "title": "الوحدات والميزات",
+      "description": "إدارة الوحدات الاختيارية وخصائص المنتجات المحفوظة في قاعدة البيانات.",
+      "renderer": "feature-management",
+      "administratorOnly": true,
+      "settingsGroup": "modules-features",
+      "settingsOrder": 10
+    },
+    {
+      "route": "settings-system",
+      "implemented": false,
+      "module": "الإعدادات",
+      "title": "إعدادات النظام",
+      "description": "مسار توافق قديم يفتح الإعدادات العامة.",
+      "renderer": "legacy-redirect",
+      "administratorOnly": true,
+      "navigationHidden": true,
+      "redirectTo": "settings-general"
+    },
+    {
+      "route": "settings-general",
+      "implemented": true,
+      "module": "الإعدادات",
+      "title": "الإعدادات العامة",
+      "description": "تنسيقات التاريخ والوقت والعملة والضريبة الافتراضية المحفوظة.",
+      "renderer": "general-settings",
+      "administratorOnly": true,
+      "settingsGroup": "general",
+      "settingsOrder": 10
+    },
+    {
+      "route": "settings-company",
+      "implemented": true,
+      "module": "الإعدادات",
+      "title": "بيانات المنشأة",
+      "description": "هوية المنشأة وبيانات التواصل والتسجيل والتذييل المحفوظة.",
+      "renderer": "company-settings",
+      "administratorOnly": true,
+      "settingsGroup": "general",
+      "settingsOrder": 20
+    },
+    {
+      "route": "settings-appearance",
+      "implemented": true,
+      "module": "الإعدادات",
+      "title": "المظهر",
+      "description": "اختيار المظهر الفاتح أو الداكن أو مظهر النظام لهذا الجهاز.",
+      "renderer": "appearance-settings",
+      "administratorOnly": true,
+      "settingsGroup": "general",
+      "settingsOrder": 30
+    },
+    {
+      "route": "settings-invoice",
+      "implemented": false,
+      "module": "الإعدادات",
+      "title": "إعدادات الفاتورة",
+      "description": "معاينة رأس وتذييل الفاتورة وخيارات العرض فقط.",
+      "renderer": "legacy-redirect",
+      "category": "invoice",
+      "administratorOnly": true,
+      "redirectTo": "settings-printers",
+      "navigationHidden": true
+    },
+    {
+      "route": "settings-printers",
+      "implemented": true,
+      "module": "الإعدادات",
+      "title": "الطابعات والطباعة",
+      "description": "الطباعة الأصلية وإعدادات الورق والقوالب ومصمم الإيصالات.",
+      "renderer": "native-printing",
+      "category": "settings",
+      "administratorOnly": true,
+      "settingsGroup": "operations",
+      "settingsOrder": 20
+    },
+    {
+      "route": "business-activities",
+      "implemented": true,
+      "module": "الإعدادات",
+      "title": "إعداد الموازين",
+      "description": "إعداد باركود الموازين وربط رموز PLU وSKU.",
+      "renderer": "business-activities",
+      "administratorOnly": true,
+      "settingsGroup": "operations",
+      "settingsOrder": 10
+    },
+    {
+      "route": "settings-backup",
+      "implemented": true,
+      "module": "الإعدادات",
+      "title": "البيانات والصيانة",
+      "description": "إنشاء النسخ الاحتياطية المحلية واستعادتها ومراجعة حالة قاعدة البيانات.",
+      "renderer": "database-settings",
+      "administratorOnly": true,
+      "settingsGroup": "maintenance-data",
+      "settingsOrder": 10
+    },
+    {
+      "route": "customers-list",
+      "implemented": true,
+      "module": "العملاء",
+      "title": "إدارة العملاء",
+      "description": "بحث وفرز ومراجعة أرصدة العملاء.",
+      "renderer": "entity-list",
+      "data": "customers"
+    },
+    {
+      "route": "customer-add",
+      "implemented": true,
+      "module": "العملاء",
+      "title": "إضافة عميل",
+      "description": "إضافة عميل وحفظ بياناته في قاعدة البيانات.",
+      "renderer": "entity-form",
+      "data": "customers",
+      "mode": "add",
+      "navigationHidden": true
+    },
+    {
+      "route": "customer-edit",
+      "implemented": true,
+      "module": "العملاء",
+      "title": "تعديل بيانات عميل",
+      "description": "اختيار عميل وتعديل بياناته في قاعدة البيانات.",
+      "renderer": "entity-form",
+      "data": "customers",
+      "mode": "edit",
+      "navigationHidden": true
+    },
+    {
+      "route": "customers-export",
+      "implemented": false,
+      "module": "العملاء",
+      "title": "تصدير بيانات العملاء",
+      "description": "هذه الشاشة قيد الإنشاء.",
+      "renderer": "under-construction",
+      "navigationHidden": true
+    },
+    {
+      "route": "customer-subscriptions",
+      "implemented": false,
+      "module": "العملاء",
+      "title": "اشتراكات العملاء",
+      "description": "هذه الشاشة قيد الإنشاء.",
+      "renderer": "under-construction",
+      "navigationHidden": true
+    },
+    {
+      "route": "customer-statement",
+      "implemented": true,
+      "module": "العملاء",
+      "title": "كشف حساب العميل",
+      "description": "مديونية العميل وحركات حسابه المحفوظة، مع التحصيل وإضافة المديونية.",
+      "renderer": "statement",
+      "data": "customers",
+      "party": "customer"
+    },
+    {
+      "route": "customer-credit-payment",
+      "implemented": true,
+      "module": "العملاء",
+      "title": "دفع آجل للعميل",
+      "description": "رابط قديم يحوّل إلى كشف حساب العميل.",
+      "renderer": "legacy-redirect",
+      "navigationHidden": true,
+      "redirectTo": "customer-statement"
+    },
+    {
+      "route": "pos",
+      "implemented": true,
+      "module": "المبيعات",
+      "title": "الكاشير اللمسي",
+      "description": "واجهة لمس سريعة لبيع الأصناف وترحيلها إلى المخزون.",
+      "renderer": "pos",
+      "data": "products"
+    },
+    {
+      "route": "sales-management",
+      "implemented": true,
+      "module": "المبيعات",
+      "title": "فواتير البيع",
+      "description": "إنشاء فواتير بيع معلقة وترحيل الفواتير ومراجعة السجل المحفوظ.",
+      "renderer": "sales-invoices",
+      "data": "sales"
+    },
+    {
+      "route": "invoice-lookup",
+      "implemented": false,
+      "module": "المبيعات",
+      "title": "البحث السريع برقم الفاتورة للتعديل",
+      "description": "البحث عن فاتورة وفتح معاينة تعديل تجريبية.",
+      "renderer": "invoice-lookup",
+      "data": "sales",
+      "navigationHidden": true
+    },
+    {
+      "route": "sales-list",
+      "implemented": false,
+      "module": "المبيعات",
+      "title": "قائمة فواتير البيع (مسار سابق)",
+      "description": "مسار توافق قديم يفتح فواتير البيع الموحدة.",
+      "renderer": "legacy-redirect",
+      "data": "sales",
+      "navigationHidden": true,
+      "redirectTo": "sales-management"
+    },
+    {
+      "route": "sales-reports",
+      "implemented": false,
+      "module": "المبيعات",
+      "title": "تقارير المبيعات",
+      "description": "تحليل المبيعات حسب الفترة وطريقة السداد.",
+      "renderer": "report",
+      "data": "sales",
+      "report": "sales",
+      "navigationHidden": true
+    },
+    {
+      "route": "sales-confirm",
+      "implemented": false,
+      "module": "المبيعات",
+      "title": "تعديل أو تأكيد الفواتير",
+      "description": "قائمة عمل للفواتير التي تحتاج مراجعة؛ التأكيد تجريبي.",
+      "renderer": "workflow",
+      "data": "sales",
+      "workflow": "sales-confirm",
+      "navigationHidden": true
+    },
+    {
+      "route": "suppliers-list",
+      "implemented": true,
+      "module": "الموردين",
+      "title": "قائمة الموردين",
+      "description": "دليل الموردين وأرصدة التعامل المحفوظة في قاعدة البيانات.",
+      "renderer": "entity-list",
+      "data": "suppliers"
+    },
+    {
+      "route": "supplier-credit",
+      "implemented": true,
+      "module": "الموردين",
+      "title": "حسابات الموردين آجلاً",
+      "description": "رابط قديم يحوّل إلى حسابات الموردين.",
+      "renderer": "legacy-redirect",
+      "navigationHidden": true,
+      "redirectTo": "supplier-payment"
+    },
+    {
+      "route": "supplier-purchases",
+      "implemented": false,
+      "module": "الموردين",
+      "title": "مشتريات الموردين",
+      "description": "رابط قديم يحوّل إلى حسابات الموردين.",
+      "renderer": "legacy-redirect",
+      "navigationHidden": true,
+      "redirectTo": "supplier-payment"
+    },
+    {
+      "route": "supplier-balance",
+      "implemented": true,
+      "module": "الموردين",
+      "title": "أرصدة الموردين",
+      "description": "رابط قديم يحوّل إلى حسابات الموردين.",
+      "renderer": "legacy-redirect",
+      "navigationHidden": true,
+      "redirectTo": "supplier-payment"
+    },
+    {
+      "route": "supplier-payment",
+      "implemented": true,
+      "module": "الموردين",
+      "title": "حسابات الموردين",
+      "description": "كل مورد وفواتيره، وإضافة فاتورة مديونية جديدة وسداد المستحق في قاعدة البيانات.",
+      "renderer": "payment",
+      "data": "suppliers",
+      "party": "supplier"
+    },
+    {
+      "route": "supplier-payment-confirm",
+      "implemented": false,
+      "module": "الموردين",
+      "title": "مراجعة سداد الموردين",
+      "description": "رابط قديم يحوّل إلى حسابات الموردين.",
+      "renderer": "legacy-redirect",
+      "navigationHidden": true,
+      "redirectTo": "supplier-payment"
+    },
+    {
+      "route": "supplier-reports",
+      "implemented": false,
+      "module": "الموردين",
+      "title": "تقارير الموردين",
+      "description": "رابط قديم يحوّل إلى حسابات الموردين.",
+      "renderer": "legacy-redirect",
+      "navigationHidden": true,
+      "redirectTo": "supplier-payment"
+    },
+    {
+      "route": "supplier-paid-report",
+      "implemented": false,
+      "module": "الموردين",
+      "title": "تقرير مدفوعات الموردين",
+      "description": "رابط قديم يحوّل إلى حسابات الموردين.",
+      "renderer": "legacy-redirect",
+      "navigationHidden": true,
+      "redirectTo": "supplier-payment"
+    },
+    {
+      "route": "purchase-management",
+      "implemented": true,
+      "module": "المشتريات",
+      "title": "إدارة المشتريات",
+      "description": "حفظ مسودة فاتورة الشراء ونشرها مع استلام المخزون وتسجيل حساب المورد.",
+      "renderer": "purchase-management",
+      "data": "purchases",
+      "invoiceType": "purchase"
+    },
+    {
+      "route": "purchase-supplier",
+      "implemented": true,
+      "module": "المشتريات",
+      "title": "إدارة الموردين أثناء الشراء",
+      "description": "اختيار المورد يتم من إدارة المشتريات.",
+      "renderer": "legacy-redirect",
+      "navigationHidden": true,
+      "redirectTo": "purchase-management"
+    },
+    {
+      "route": "purchases-list",
+      "implemented": true,
+      "module": "المشتريات",
+      "title": "قائمة المشتريات",
+      "description": "سجل فواتير الشراء المنشورة والمسودات المحفوظة.",
+      "renderer": "purchase-list",
+      "data": "purchases"
+    },
+    {
+      "route": "purchase-details",
+      "implemented": true,
+      "module": "المشتريات",
+      "title": "عرض فاتورة مشتريات",
+      "description": "عرض مستند شراء محفوظ من قائمة المشتريات أو مرجع حركة المخزون.",
+      "renderer": "purchase-details",
+      "navigationHidden": true,
+      "permissionRoute": "purchases-list",
+      "data": "purchases"
+    },
+    {
+      "route": "purchase-reports",
+      "implemented": false,
+      "module": "المشتريات",
+      "title": "تقارير المشتريات",
+      "description": "مراجعة الفواتير من قائمة المشتريات.",
+      "renderer": "legacy-redirect",
+      "navigationHidden": true,
+      "redirectTo": "purchases-list"
+    },
+    {
+      "route": "purchase-expiry",
+      "implemented": false,
+      "module": "المشتريات",
+      "title": "تعيين تاريخ صلاحية المنتجات",
+      "description": "تحديد صلاحية الأصناف يتم من فاتورة الشراء.",
+      "renderer": "legacy-redirect",
+      "navigationHidden": true,
+      "redirectTo": "purchase-management"
+    },
+    {
+      "route": "purchase-confirm",
+      "implemented": false,
+      "module": "المشتريات",
+      "title": "تأكيد عملية الشراء",
+      "description": "تأكيد الفاتورة يتم من إدارة المشتريات.",
+      "renderer": "legacy-redirect",
+      "navigationHidden": true,
+      "redirectTo": "purchase-management"
+    },
+    {
+      "route": "returns-overview",
+      "implemented": true,
+      "module": "المرتجعات",
+      "title": "إدارة المرتجعات",
+      "description": "المرتجعات المحفوظة وإضافة مرتجع برقم فاتورة البيع أو الشراء.",
+      "renderer": "returns-management"
+    },
+    {
+      "route": "return-details",
+      "implemented": true,
+      "module": "المرتجعات",
+      "title": "تفاصيل المرتجع",
+      "description": "اختيار مرتجع وعرض أصنافه وتسويته وحركات الخزنة المرتبطة.",
+      "renderer": "return-details",
+      "navigationHidden": true,
+      "permissionRoute": "returns-overview"
+    },
+    {
+      "route": "sales-returns",
+      "implemented": true,
+      "module": "المرتجعات",
+      "title": "إدارة مرتجعات المبيعات",
+      "description": "اختيار فاتورة البيع وتحديد الكمية المرتجعة مع إعادة المخزون ورد المبلغ أو تخفيض مديونية العميل.",
+      "renderer": "legacy-redirect",
+      "navigationHidden": true,
+      "redirectTo": "returns-overview"
+    },
+    {
+      "route": "purchase-returns",
+      "implemented": true,
+      "module": "المرتجعات",
+      "title": "إدارة مرتجعات المشتريات",
+      "description": "إرجاع بضاعة من إيصال الشراء الأصلي مع تحديد تسوية المورد والتكلفة المسجلة للبضاعة المرتجعة.",
+      "renderer": "legacy-redirect",
+      "navigationHidden": true,
+      "redirectTo": "returns-overview"
+    },
+    {
+      "route": "receipt-printer",
+      "implemented": false,
+      "module": "الإعدادات",
+      "title": "تسطيب برنتر الفواتير",
+      "description": "معاينة إعدادات طابعة حرارية فقط.",
+      "renderer": "legacy-redirect",
+      "category": "receipt",
+      "administratorOnly": true,
+      "redirectTo": "settings-printers",
+      "navigationHidden": true
+    },
+    {
+      "route": "barcode-printer",
+      "implemented": false,
+      "module": "الإعدادات",
+      "title": "تسطيب برنتر الباركود",
+      "description": "معاينة اتصال ومقاس ملصقات دون تثبيت تعريفات.",
+      "renderer": "legacy-redirect",
+      "category": "barcode",
+      "featureKey": "barcode-label-printing",
+      "administratorOnly": true,
+      "redirectTo": "settings-printers",
+      "navigationHidden": true
+    },
+    {
+      "route": "barcode-designer",
+      "implemented": false,
+      "module": "الإعدادات",
+      "title": "تصميم وطباعة الباركود",
+      "description": "مصمم ملصق باركود تفاعلي ومعاينة طباعة.",
+      "renderer": "legacy-redirect",
+      "category": "designer",
+      "featureKey": "barcode-label-printing",
+      "administratorOnly": true,
+      "redirectTo": "settings-printers",
+      "navigationHidden": true
+    },
+    {
+      "route": "print-design",
+      "implemented": false,
+      "module": "الإعدادات",
+      "title": "إعدادات التصميم",
+      "description": "خطوط ومحاذاة وهوامش نموذج الملصق.",
+      "renderer": "legacy-redirect",
+      "category": "design",
+      "featureKey": "barcode-label-printing",
+      "administratorOnly": true,
+      "redirectTo": "settings-printers",
+      "navigationHidden": true
+    },
+    {
+      "route": "print-advanced",
+      "implemented": false,
+      "module": "الإعدادات",
+      "title": "التنسيق المتقدم",
+      "description": "معاينة كثافة واتجاه ومقاسات الطباعة.",
+      "renderer": "legacy-redirect",
+      "category": "advanced",
+      "featureKey": "barcode-label-printing",
+      "administratorOnly": true,
+      "redirectTo": "settings-printers",
+      "navigationHidden": true
+    },
+    {
+      "route": "barcode-product-edit",
+      "implemented": false,
+      "module": "الإعدادات",
+      "title": "تعديل السعر والكمية والباركود",
+      "description": "تعديل عرض ملصق منتج داخل الجلسة.",
+      "renderer": "legacy-redirect",
+      "data": "products",
+      "mode": "edit",
+      "featureKey": "barcode-label-printing",
+      "administratorOnly": true,
+      "redirectTo": "settings-printers",
+      "navigationHidden": true
+    },
+    {
+      "route": "expenses-list",
+      "implemented": true,
+      "module": "المصروفات والسندات",
+      "title": "إدارة المصروفات",
+      "description": "إضافة أنواع المصروفات وحفظها لاستخدامها في سندات الصرف.",
+      "renderer": "expense-categories"
+    },
+    {
+      "route": "expense-categories",
+      "implemented": false,
+      "module": "المصروفات والسندات",
+      "title": "أنواع المصروفات",
+      "description": "تم نقل أنواع المصروفات إلى إدارة المصروفات.",
+      "renderer": "legacy-redirect",
+      "navigationHidden": true,
+      "redirectTo": "expenses-list"
+    },
+    {
+      "route": "expense-add",
+      "implemented": true,
+      "module": "المصروفات والسندات",
+      "title": "سند صرف",
+      "description": "تسجيل مصروف من نوع محفوظ وخصمه من الخزنة أو البنك.",
+      "renderer": "expense-voucher"
+    },
+    {
+      "route": "financial-movement",
+      "implemented": false,
+      "module": "المصروفات والسندات",
+      "title": "حركة مالية",
+      "description": "تم نقل تسجيل المصروفات إلى سند صرف.",
+      "renderer": "legacy-redirect",
+      "navigationHidden": true,
+      "redirectTo": "expense-add"
+    },
+    {
+      "route": "accounts-list",
+      "implemented": true,
+      "module": "الخزنة والبنك",
+      "title": "قائمة الخزنة والبنك",
+      "description": "إدارة الخزن والبنوك وأرصدتها المحفوظة.",
+      "renderer": "treasury-accounts"
+    },
+    {
+      "route": "account-deposit",
+      "implemented": true,
+      "module": "الخزنة والبنك",
+      "title": "إيداع رصيد",
+      "description": "إيداع رصيد في خزنة أو بنك مع حفظ الحركة.",
+      "renderer": "treasury-movement"
+    },
+    {
+      "route": "account-withdraw",
+      "implemented": true,
+      "module": "الخزنة والبنك",
+      "title": "سحب رصيد",
+      "description": "سحب رصيد من خزنة أو بنك مع حفظ الحركة.",
+      "renderer": "treasury-movement"
+    },
+    {
+      "route": "account-add",
+      "implemented": false,
+      "module": "الخزنة والبنك",
+      "title": "إضافة خزنة جديدة",
+      "description": "رابط قديم يحول إلى قائمة الخزنة والبنك.",
+      "renderer": "legacy-redirect",
+      "navigationHidden": true,
+      "redirectTo": "accounts-list"
+    },
+    {
+      "route": "accounts-balance",
+      "implemented": false,
+      "module": "الخزنة والبنك",
+      "title": "الرصيد الحالي للخزنة والبنك",
+      "description": "رابط قديم يحول إلى قائمة الخزنة والبنك.",
+      "renderer": "legacy-redirect",
+      "navigationHidden": true,
+      "redirectTo": "accounts-list"
+    },
+    {
+      "route": "account-movements",
+      "implemented": false,
+      "module": "الخزنة والبنك",
+      "title": "حركة الخزنة والبنك",
+      "description": "رابط قديم يحول إلى قائمة الخزنة والبنك.",
+      "renderer": "legacy-redirect",
+      "navigationHidden": true,
+      "redirectTo": "accounts-list"
+    },
+    {
+      "route": "alerts-list",
+      "implemented": true,
+      "module": "التنبيهات",
+      "title": "التنبيهات",
+      "description": "جميع التنبيهات مع التصفية حسب النوع وحالة القراءة.",
+      "renderer": "alerts"
+    },
+    {
+      "route": "reorder-alert",
+      "implemented": false,
+      "module": "التنبيهات",
+      "title": "تنبيه حد الطلب",
+      "description": "ضبط حدود الطلب التوضيحية للأصناف.",
+      "renderer": "legacy-redirect",
+      "navigationHidden": true,
+      "redirectTo": "alerts-list",
+      "permissionControllable": true
+    },
+    {
+      "route": "low-stock-alert",
+      "implemented": false,
+      "module": "التنبيهات",
+      "title": "تنبيه نقص الأصناف",
+      "description": "الأصناف التي بلغت أو تجاوزت حد الطلب.",
+      "renderer": "legacy-redirect",
+      "navigationHidden": true,
+      "redirectTo": "alerts-list",
+      "permissionControllable": true
+    },
+    {
+      "route": "warehouses-list",
+      "implemented": true,
+      "module": "المخزن",
+      "title": "دليل المخازن",
+      "description": "المخازن والأرصدة وحركات المخزون الفعلية.",
+      "renderer": "warehouse-directory",
+      "featureKey": "basic-inventory"
+    },
+    {
+      "route": "warehouse-add",
+      "implemented": false,
+      "module": "المخزن",
+      "title": "إضافة مخزن جديد",
+      "description": "افتح دليل المخازن لإضافة مخزن.",
+      "renderer": "legacy-redirect",
+      "redirectTo": "warehouses-list",
+      "featureKey": "multiple-warehouses",
+      "navigationHidden": true
+    },
+    {
+      "route": "warehouse-settings",
+      "implemented": false,
+      "module": "الإعدادات",
+      "title": "إعدادات المخزن (مسار سابق)",
+      "description": "مسار توافق قديم يفتح دليل المخازن.",
+      "renderer": "legacy-redirect",
+      "featureKey": "multiple-warehouses",
+      "administratorOnly": true,
+      "navigationHidden": true,
+      "redirectTo": "warehouses-list"
+    },
+    {
+      "route": "stock-adjustment",
+      "implemented": false,
+      "module": "المخزن",
+      "title": "تسوية المخزون",
+      "description": "افتح دليل المخازن لتسوية المخزون.",
+      "renderer": "legacy-redirect",
+      "redirectTo": "warehouses-list",
+      "navigationHidden": true
+    },
+    {
+      "route": "warehouse-transfer",
+      "implemented": false,
+      "module": "المخزن",
+      "title": "نقل الأصناف بين المخازن",
+      "description": "افتح دليل المخازن للنقل.",
+      "renderer": "legacy-redirect",
+      "redirectTo": "warehouses-list",
+      "featureKey": "multiple-warehouses",
+      "navigationHidden": true
+    },
+    {
+      "route": "stock-movements",
+      "implemented": false,
+      "module": "المخزن",
+      "title": "حركة الأصناف",
+      "description": "افتح دليل المخازن لسجل الحركة.",
+      "renderer": "legacy-redirect",
+      "redirectTo": "warehouses-list",
+      "navigationHidden": true
+    },
+    {
+      "route": "low-stock",
+      "implemented": false,
+      "module": "المخزن",
+      "title": "الأصناف الناقصة",
+      "description": "مسار توافق لتقرير توافر المخزون الحالي.",
+      "renderer": "legacy-redirect",
+      "redirectTo": "report-low-stock",
+      "navigationHidden": true
+    },
+    {
+      "route": "unit-add",
+      "implemented": true,
+      "module": "الإعدادات",
+      "title": "وحدات القياس",
+      "description": "إدارة وحدات القياس الأساسية المحفوظة في قاعدة البيانات.",
+      "renderer": "catalog-units",
+      "featureKey": "product-catalog",
+      "administratorOnly": true
+    },
+    {
+      "route": "product-categories",
+      "implemented": true,
+      "module": "الإعدادات",
+      "title": "تصنيفات المنتجات",
+      "description": "إدارة التصنيفات والتصنيفات الفرعية المحفوظة في قاعدة البيانات.",
+      "renderer": "catalog-categories",
+      "featureKey": "product-catalog",
+      "administratorOnly": true
+    },
+    {
+      "route": "manufacturing",
+      "implemented": false,
+      "module": "المخزن",
+      "title": "تصنيع",
+      "description": "تركيبة تصنيع تجريبية ومقارنة مدخلات ومخرجات.",
+      "renderer": "manufacturing",
+      "data": "products",
+      "featureKey": "manufacturing",
+      "navigationHidden": true
+    },
+    {
+      "route": "products-list",
+      "implemented": true,
+      "module": "المخزن",
+      "title": "دليل المنتجات",
+      "description": "المنتجات والأسعار والتصنيفات المحفوظة فعليًا.",
+      "renderer": "catalog-products",
+      "featureKey": "product-catalog"
+    },
+    {
+      "route": "product-add",
+      "implemented": true,
+      "module": "المخزن",
+      "title": "إضافة المنتجات",
+      "description": "إضافة منتج أساسي إلى دليل المنتجات.",
+      "renderer": "catalog-product-form",
+      "featureKey": "product-catalog",
+      "mode": "add",
+      "navigationHidden": true
+    },
+    {
+      "route": "product-edit",
+      "implemented": true,
+      "module": "المخزن",
+      "title": "تعديل المنتجات",
+      "description": "اختيار منتج وتعديل بياناته الأساسية مع حماية تعارض الحفظ.",
+      "renderer": "catalog-product-form",
+      "featureKey": "product-catalog",
+      "mode": "edit",
+      "navigationHidden": true
+    },
+    {
+      "route": "product-quick-add",
+      "implemented": true,
+      "module": "المخزن",
+      "title": "إضافة منتج سريع",
+      "description": "إضافة منتج أساسي بسرعة إلى الدليل الحقيقي.",
+      "renderer": "catalog-product-form",
+      "featureKey": "product-catalog",
+      "mode": "quick",
+      "navigationHidden": true
+    },
+    {
+      "route": "employees-list",
+      "implemented": true,
+      "module": "الموظفين",
+      "title": "إضافة وإدارة الموظفين",
+      "description": "إضافة موظفين جدد وتعديل بياناتهم وعرض السجلات المحفوظة.",
+      "renderer": "workforce-employees",
+      "data": "employees",
+      "featureKey": "employee-management",
+      "administratorOnly": true
+    },
+    {
+      "route": "employee-add",
+      "implemented": true,
+      "module": "الموظفين",
+      "title": "إضافة موظف جديد",
+      "description": "إضافة موظف بالاسم فقط دون إنشاء حساب دخول.",
+      "renderer": "workforce-employees",
+      "data": "employees",
+      "mode": "add",
+      "featureKey": "employee-management",
+      "administratorOnly": true,
+      "navigationHidden": true
+    },
+    {
+      "route": "employee-payroll",
+      "implemented": true,
+      "module": "الموظفين",
+      "title": "صرف الرواتب",
+      "description": "صرف الراتب الشهري بعد خصم السلف المسجلة وعرض سجل الصرف المحفوظ.",
+      "renderer": "workforce-payroll",
+      "featureKey": "employee-management",
+      "administratorOnly": true
+    },
+    {
+      "route": "employee-advances",
+      "implemented": true,
+      "module": "الموظفين",
+      "title": "السلفيات",
+      "description": "تسجيل سلفة للموظف وعرض السلف المحفوظة في قاعدة البيانات.",
+      "renderer": "workforce-advances",
+      "featureKey": "employee-management",
+      "administratorOnly": true
+    },
+    {
+      "route": "shifts-list",
+      "implemented": true,
+      "module": "الموظفين",
+      "title": "ورديات الكاشير",
+      "description": "سجل الورديات وفتح وإغلاق جلسات النقد الفعلية.",
+      "renderer": "workforce-shifts",
+      "data": "shifts"
+    },
+    {
+      "route": "shift-add",
+      "implemented": true,
+      "module": "الموظفين",
+      "title": "الوردية الحالية",
+      "description": "فتح وردية وبيان النقد الفعلي للكاشير.",
+      "renderer": "workforce-shifts",
+      "data": "shifts",
+      "mode": "add"
+    },
+    {
+      "route": "shift-reports",
+      "implemented": true,
+      "module": "الموظفين",
+      "title": "تقارير الورديات",
+      "description": "ملخصات الورديات وفروق النقد مع فلاتر الخادم.",
+      "renderer": "workforce-shifts",
+      "data": "shifts",
+      "report": "shifts"
+    },
+    {
+      "route": "attendance",
+      "implemented": true,
+      "module": "الموظفين",
+      "title": "الحضور والانصراف",
+      "description": "تسجيل حضور اختياري مستقل عن ورديات الكاشير مع سجل تصحيحات إدارية.",
+      "renderer": "workforce-attendance",
+      "data": "employees",
+      "featureKey": "employee-attendance",
+      "administratorOnly": true
+    },
+    {
+      "route": "users-list",
+      "implemented": true,
+      "module": "الإعدادات",
+      "title": "المستخدمون والصلاحيات",
+      "description": "إدارة حسابات مسؤولي النظام والكاشير وصلاحيات الشاشات المحفوظة.",
+      "renderer": "user-management",
+      "administratorOnly": true,
+      "settingsGroup": "users-security",
+      "settingsOrder": 10
+    },
+    {
+      "route": "operation-log",
+      "implemented": true,
+      "module": "الإعدادات",
+      "title": "سجل العمليات",
+      "description": "متابعة طلبات النظام ونتائجها والمستخدم المنفذ ووقتها.",
+      "renderer": "operation-log",
+      "administratorOnly": true,
+      "settingsGroup": "users-security",
+      "settingsOrder": 90
+    },
+    {
+      "route": "user-permissions",
+      "implemented": false,
+      "module": "الإعدادات",
+      "title": "صلاحيات المستخدمين",
+      "description": "مسار توافق قديم يفتح إدارة المستخدمين والصلاحيات الجديدة.",
+      "renderer": "legacy-redirect",
+      "administratorOnly": true,
+      "navigationHidden": true,
+      "redirectTo": "users-list"
+    },
+    {
+      "route": "sales-permissions",
+      "implemented": false,
+      "module": "الإعدادات",
+      "title": "صلاحيات إدارة المبيعات",
+      "description": "مسار توافق قديم يفتح إدارة صلاحيات شاشات الكاشير.",
+      "renderer": "legacy-redirect",
+      "administratorOnly": true,
+      "navigationHidden": true,
+      "redirectTo": "users-list"
+    },
+    {
+      "route": "settings-permissions",
+      "implemented": false,
+      "module": "الإعدادات",
+      "title": "صلاحيات الإعدادات",
+      "description": "مسار توافق قديم يفتح إدارة المستخدمين المركزية.",
+      "renderer": "legacy-redirect",
+      "administratorOnly": true,
+      "navigationHidden": true,
+      "redirectTo": "users-list"
+    },
+    {
+      "route": "shift-approval",
+      "implemented": false,
+      "module": "الموظفين",
+      "title": "إضافة ورديات وتأكيدها",
+      "description": "مسار توافق قديم لورديات الكاشير.",
+      "renderer": "legacy-redirect",
+      "data": "shifts",
+      "workflow": "shift-approval",
+      "featureKey": "advanced-shifts",
+      "redirectTo": "shifts-list",
+      "navigationHidden": true
+    },
+    {
+      "route": "profit-sales-report",
+      "implemented": false,
+      "module": "الإحصائيات والأرباح",
+      "title": "تقارير أرباح المبيعات",
+      "description": "هامش إجمالي مبني على تكلفة بيانات العرض.",
+      "renderer": "report",
+      "data": "sales",
+      "report": "sales-profit"
+    },
+    {
+      "route": "profits",
+      "implemented": false,
+      "module": "الإحصائيات والأرباح",
+      "title": "الأرباح",
+      "description": "الإيراد والتكلفة والمصروف وصافي الربح التجريبي.",
+      "renderer": "report",
+      "data": "sales",
+      "report": "profits"
+    },
+    {
+      "route": "analytics-sales",
+      "implemented": false,
+      "module": "الإحصائيات والأرباح",
+      "title": "تقارير المبيعات",
+      "description": "اتجاهات ومؤشرات مبيعات العرض.",
+      "renderer": "report",
+      "data": "sales",
+      "report": "sales",
+      "featureKey": "advanced-reports"
+    },
+    {
+      "route": "analytics-purchases",
+      "implemented": false,
+      "module": "الإحصائيات والأرباح",
+      "title": "تقارير المشتريات",
+      "description": "اتجاهات وقيم مشتريات العرض.",
+      "renderer": "report",
+      "data": "purchases",
+      "report": "purchases",
+      "featureKey": "advanced-reports"
+    },
+    {
+      "route": "analytics-suppliers",
+      "implemented": false,
+      "module": "الإحصائيات والأرباح",
+      "title": "تقارير الموردين",
+      "description": "المستحق والمدفوع ومساهمة الموردين.",
+      "renderer": "report",
+      "data": "suppliers",
+      "report": "suppliers",
+      "featureKey": "advanced-reports"
+    },
+    {
+      "route": "analytics-shifts",
+      "implemented": false,
+      "module": "الإحصائيات والأرباح",
+      "title": "تقارير الورديات",
+      "description": "مسار توافق لتقارير ورديات الكاشير.",
+      "renderer": "legacy-redirect",
+      "data": "shifts",
+      "report": "shifts",
+      "featureKey": "advanced-shifts",
+      "redirectTo": "shift-reports",
+      "navigationHidden": true
+    },
+    {
+      "route": "tracking-reports",
+      "implemented": false,
+      "module": "الإحصائيات والأرباح",
+      "title": "تقارير التتبع",
+      "description": "تحليل حالات وزمن صيانة الأجهزة.",
+      "renderer": "report",
+      "data": "maintenance",
+      "report": "tracking",
+      "featureKey": "advanced-reports"
+    },
+    {
+      "route": "installment-system",
+      "implemented": true,
+      "module": "البيع بالتقسيط",
+      "title": "البيع بالتقسيط",
+      "description": "إنشاء عقد وجدول أقساط محسوب داخل الجلسة.",
+      "renderer": "installments",
+      "data": "installments",
+      "mode": "create",
+      "featureKey": "installments"
+    },
+    {
+      "route": "installment-payment",
+      "implemented": true,
+      "module": "البيع بالتقسيط",
+      "title": "سداد القسط",
+      "description": "تحميل عقود العميل من قاعدة البيانات وتسجيل سداد الأقساط في الدفتر والخزنة.",
+      "renderer": "installments",
+      "data": "installments",
+      "mode": "payment",
+      "featureKey": "installments"
+    },
+    {
+      "route": "maintenance-intake",
+      "implemented": true,
+      "module": "الصيانة",
+      "title": "تسجيل جهاز للصيانة",
+      "description": "تسجيل بيانات العميل والجهاز والعطل وتاريخ الاستلام والتسليم المتوقع.",
+      "renderer": "maintenance-intake",
+      "data": "maintenance",
+      "featureKey": "maintenance-management"
+    },
+    {
+      "route": "maintenance-tracking",
+      "implemented": true,
+      "module": "الصيانة",
+      "title": "قائمة الصيانة",
+      "description": "عرض أجهزة الصيانة حسب العميل وتحديث الحالة وتسجيل التسليم.",
+      "renderer": "maintenance-tracking",
+      "data": "maintenance",
+      "featureKey": "maintenance-management"
+    },
+    {
+      "route": "branches-list",
+      "implemented": false,
+      "module": "الفروع والخدمات",
+      "title": "الفروع والفرعيات",
+      "description": "قائمة الفروع والمسؤول والمبيعات التجريبية.",
+      "renderer": "entity-list",
+      "data": "branches",
+      "featureKey": "multiple-branches"
+    },
+    {
+      "route": "branch-stock-transfer",
+      "implemented": false,
+      "module": "الفروع والخدمات",
+      "title": "حركة الأصناف بين الفروع",
+      "description": "مستند نقل تجريبي بين فرعين.",
+      "renderer": "transfer",
+      "data": "products",
+      "scope": "branches",
+      "featureKey": "multiple-branches"
+    },
+    {
+      "route": "branch-finance",
+      "implemented": false,
+      "module": "الفروع والخدمات",
+      "title": "حركة مالية للفروع",
+      "description": "تحويل تجريبي ومقارنة أرصدة الفروع.",
+      "renderer": "workflow",
+      "data": "branches",
+      "workflow": "branch-finance",
+      "featureKey": "multiple-branches"
+    },
+    {
+      "route": "cash-services",
+      "implemented": false,
+      "module": "الفروع والخدمات",
+      "title": "خدمات كاش",
+      "description": "واجهة عرض لخدمات شحن ودفع غير متصلة بأي مزود فعلي.",
+      "renderer": "cash-services",
+      "featureKey": "cash-services"
+    },
+    {
+      "route": "shift-details",
+      "implemented": true,
+      "module": "الموظفين",
+      "title": "تفاصيل الوردية",
+      "description": "رابط سياقي من سجل الورديات لملخص النقد والحركات ومراجع المستندات.",
+      "renderer": "workforce-shifts",
+      "navigationHidden": true,
+      "permissionRoute": "shifts-list"
+    },
+    {
+      "route": "attendance-history",
+      "implemented": true,
+      "module": "الموظفين",
+      "title": "سجل الحضور",
+      "description": "تاريخ الحضور والانصراف والمدد والتصحيحات الإدارية.",
+      "renderer": "workforce-attendance",
+      "featureKey": "employee-attendance",
+      "administratorOnly": true,
+      "settingsGroup": "users-security",
+      "settingsOrder": 82
+    },
+    {"route":"delivery-orders",
+      "implemented": true,"module":"المبيعات","title":"طلبات التوصيل","description":"متابعة طلبات التوصيل والطيار المسؤول.","renderer":"delivery-orders"},
+    {"route":"drivers-management",
+      "implemented": true,"module":"المبيعات","title":"إدارة الطيارين","description":"إضافة وتعديل وتفعيل الطيارين.","renderer":"drivers-management"}
+  ]
+}

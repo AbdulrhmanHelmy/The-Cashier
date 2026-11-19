@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\AlKhayal.Core\AlKhayal.Core.csproj" />
+    <ProjectReference Include="..\AlKhayal.Application\AlKhayal.Application.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Dapper" Version="2.1.89" />
+    <PackageReference Include="System.Data.SQLite.Core" Version="1.0.119" />
+  </ItemGroup>
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.Management" />
+    <Reference Include="System.Security" />
+    <EmbeddedResource Include="Licensing\TrustedKeys\*.xml" />
+    <EmbeddedResource Include="Migrations\*.sql" />
+  </ItemGroup>
+  <Target Name="ValidateLicensePublicKeys" BeforeTargets="PrepareResources">
+    <Exec Command="powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\..\scripts\validate-license-public-keys.ps1&quot; -KeyDirectory &quot;$(MSBuildProjectDirectory)\Licensing\TrustedKeys&quot;" />
+  </Target>
+</Project>
+

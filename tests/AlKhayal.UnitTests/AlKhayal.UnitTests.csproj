@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\AlKhayal.Core\AlKhayal.Core.csproj" />
+    <ProjectReference Include="..\..\src\AlKhayal.Data\AlKhayal.Data.csproj" />
+    <ProjectReference Include="..\..\src\AlKhayal.Printing\AlKhayal.Printing.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\..\src\AlKhayal.UI\WebView2UserDataFolderResolver.cs" Link="WebView2UserDataFolderResolver.cs" />
+    <Compile Include="..\..\src\AlKhayal.UI\WebViewKeyboardPolicy.cs" Link="WebViewKeyboardPolicy.cs" />
+    <Compile Include="..\..\src\AlKhayal.UI\DesktopPdfOpener.cs" Link="DesktopPdfOpener.cs" />
+    <Compile Include="..\..\src\AlKhayal.UI\StartupRecoveryState.cs" Link="StartupRecoveryState.cs" />
+    <Compile Include="..\..\src\AlKhayal.UI\ActivationForm.cs" Link="ActivationForm.cs" />
+    <Compile Include="..\..\src\AlKhayal.UI\ActivationSupport.cs" Link="ActivationSupport.cs" />
+    <Compile Include="..\..\src\AlKhayal.UI\TrialAccessForm.cs" Link="TrialAccessForm.cs" />
+    <Compile Include="..\..\src\AlKhayal.UI\WindowsLicenseInstaller.cs" Link="WindowsLicenseInstaller.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="zxing">
+      <HintPath>$(NuGetPackageRoot)zxing.net\0.16.11\lib\net48\zxing.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+</Project>

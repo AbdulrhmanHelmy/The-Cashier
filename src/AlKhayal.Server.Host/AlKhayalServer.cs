@@ -1,0 +1,311 @@
+using System;
+using System.IO;
+using System.Text;
+using System.Threading;
+using AlKhayal.Api;
+using AlKhayal.Application.Authentication;
+using AlKhayal.Application.BusinessActivities;
+using AlKhayal.Application.Features;
+using AlKhayal.Application.Users;
+using AlKhayal.Application.Settings;
+using AlKhayal.Application.Catalog;
+using AlKhayal.Application.Inventory;
+using AlKhayal.Application.Customers;
+using AlKhayal.Application.Maintenance;
+using AlKhayal.Application.Suppliers;
+using AlKhayal.Application.Purchasing;
+using AlKhayal.Application.Sales;
+using AlKhayal.Application.Operations;
+using AlKhayal.Data.Authentication;
+using AlKhayal.Data.BusinessActivities;
+using AlKhayal.Data.Features;
+using AlKhayal.Data.Users;
+using AlKhayal.Data.Settings;
+using AlKhayal.Data.Catalog;
+using AlKhayal.Data.Inventory;
+using AlKhayal.Data.Customers;
+using AlKhayal.Data.Maintenance;
+using AlKhayal.Data.Suppliers;
+using AlKhayal.Data.Purchasing;
+using AlKhayal.Data.Sales;
+using AlKhayal.Data.Operations;
+using AlKhayal.Application.Exports;
+using AlKhayal.Data.Exports;
+using AlKhayal.Data.Delivery;
+using AlKhayal.Data.Database;
+using AlKhayal.Application.Backups;
+using AlKhayal.Data.Backups;
+using Microsoft.Owin;
+using Microsoft.Owin.Hosting;
+using Owin;
+
+[assembly: OwinStartup(typeof(AlKhayal.Server.Host.AlKhayalStartup))]
+
+namespace AlKhayal.Server.Host
+{
+    public sealed class AlKhayalServer : IDisposable
+    {
+        private IDisposable _server;
+        private SqliteBusinessBackups _backups;
+        private BackupMaintenanceHandler _maintenance;
+        private FileStream _databaseLease;
+        private AlKhayal.Application.Licensing.ILicenseGate licenseGate;
+        public AlKhayalServer(AlKhayal.Application.Licensing.ILicenseGate licenseGate = null)
+        {
+            this.licenseGate = licenseGate;
+        }
+
+        public HostOptions Options { get; private set; }
+        public string BackupDirectory => _backups?.ConfiguredDirectory;
+        public bool IsRestoring => _maintenance?.IsExclusive == true;
+
+        public void Start(HostOptions options, AlKhayal.Application.Printing.IPrinterBackend printerBackend = null)
+        {
+            if (_databaseLease != null) throw new InvalidOperationException("The AlKhayal server is already running.");
+            Options = options;
+            if (licenseGate == null) licenseGate = AlKhayal.Data.Licensing.MachineLicensing.CreateTrial(options.DatabasePath);
+            _databaseLease = OpenDatabaseLease(options);
+            try { StartWithDatabaseLease(options, printerBackend); }
+            catch { Dispose(); throw; }
+        }
+
+        private void StartWithDatabaseLease(HostOptions options, AlKhayal.Application.Printing.IPrinterBackend printerBackend)
+        {
+            var connectionString = Db.ConnectionStringFor(options.DatabasePath);
+            Migrator.Run(connectionString);
+            _backups = new SqliteBusinessBackups(options.DatabasePath);
+            _maintenance = new BackupMaintenanceHandler();
+            var users = new SqliteUserStore(connectionString);
+            var sessions = new SqliteSessionStore(connectionString);
+            var auth = new AuthService(users, sessions, new PasswordHasher(), new SecureTokenGenerator(), new SystemClock());
+            var operationLogs = new OperationLogService(new SqliteOperationLogStore(connectionString));
+            var activityStore = new SqliteBusinessActivityStore(connectionString);
+            var features = new FeatureService(new SqliteFeatureStore(connectionString), activityStore);
+            var activities = new BusinessActivityService(activityStore, features);
+            var userManagement = new UserManagementService(new SqliteUserManagementStore(connectionString), new JsonScreenCatalog(options.FrontendPath), new PasswordHasher());
+            var settingsStore = new SqliteSettingsStore(connectionString, options.DatabasePath);
+            var settings = new SettingsService(settingsStore, settingsStore);
+            var catalog = new CatalogService(new SqliteCatalogStore(connectionString), new CatalogFeatureReader(features));
+            var inventory = new InventoryService(new SqliteInventoryStore(connectionString, _backups),features);
+            var customers = new CustomerService(new SqliteCustomerRepository(connectionString));
+            var accounts = new CustomerAccountService(new SqliteCustomerAccountRepository(connectionString));
+            var installments = new InstallmentService(new SqliteCustomerInstallmentRepository(connectionString));
+            var maintenance = new MaintenanceService(new SqliteMaintenanceRepository(connectionString));
+            var suppliers = new SupplierService(new SqliteSupplierRepository(connectionString));
+            var supplierAccounts = new SupplierAccountService(new SqliteSupplierAccountRepository(connectionString));
+            var supplierLedger = new SupplierLedgerService(new SqliteSupplierLedgerRepository(connectionString));
+            var purchases = new PurchaseService(new SqlitePurchaseRepository(connectionString), new SqliteSupplierRepository(connectionString));
+            var paymentMethods = new AlKhayal.Application.Payments.PaymentInstrumentService(new AlKhayal.Data.Payments.SqlitePaymentInstrumentStore(connectionString));
+            var sales = new SalesService(new SqliteSalesStore(connectionString));
+            var delivery = new AlKhayal.Application.Delivery.DeliveryService(new SqliteDeliveryStore(connectionString));
+            var transactionReports = new AlKhayal.Application.Reports.TransactionReportService(new AlKhayal.Data.Reports.SqliteTransactionReportStore(connectionString));
+            var stockReports = new AlKhayal.Application.Reports.StockReportService(new AlKhayal.Data.Reports.SqliteStockReportStore(connectionString));
+            var netProfit = new AlKhayal.Application.Reports.NetProfitService(new AlKhayal.Data.Reports.SqliteNetProfitStore(connectionString));
+            var salesReport = new AlKhayal.Application.Reports.SalesReportService(new AlKhayal.Data.Reports.SqliteSalesReportStore(connectionString));
+            var treasury = new AlKhayal.Application.Treasury.TreasuryService(new AlKhayal.Data.Treasury.SqliteTreasuryStore(connectionString));
+            var expenses = new AlKhayal.Application.Expenses.ExpenseService(new AlKhayal.Data.Expenses.SqliteExpenseStore(connectionString));
+            var returns = new AlKhayal.Application.Returns.ReturnService(new AlKhayal.Data.Returns.SqliteReturnReadStore(connectionString), sales, purchases);
+            var workforce = new AlKhayal.Application.Workforce.WorkforceService(new AlKhayal.Data.Workforce.SqliteWorkforceStore(connectionString));
+            var outputBackend = printerBackend ?? new AlKhayal.Printing.WindowsPrinterBackend(new AlKhayal.Printing.NativePrintRenderer());
+            var printPayments = new AlKhayal.Data.Printing.SqlitePrintPaymentReader(connectionString);
+            var printing = new AlKhayal.Application.Printing.PrintingService(new AlKhayal.Data.Printing.SqlitePrintRepository(connectionString), new AlKhayal.Application.Printing.PrintDocumentProvider(sales, purchases, returns, workforce, settings, printPayments, printPayments), outputBackend, new AlKhayal.Data.Printing.SqlitePrintDocumentSearch(connectionString));
+            var labels = new AlKhayal.Application.Printing.LabelService(new AlKhayal.Data.Printing.SqliteLabelRepository(connectionString), outputBackend as AlKhayal.Application.Printing.ILabelPrinterBackend, printing);
+            var barcodes = new AlKhayal.Application.Catalog.BarcodeService(new SqliteCatalogStore(connectionString));
+            var operationalReports = new AlKhayal.Application.Reports.OperationalReportService(new AlKhayal.Data.Reports.SqliteOperationalReportStore(connectionString));
+            var businessOverview = new AlKhayal.Application.Reports.BusinessOverviewService(salesReport,transactionReports,netProfit,operationalReports);
+            var alerts = new AlKhayal.Application.Alerts.AlertService(new AlKhayal.Data.Alerts.SqliteAlertStore(connectionString));
+            var exports = new ExportService(new SqliteExportDataSource(connectionString), new IExportFileWriter[] { new CsvExportWriter(), new XlsxExportWriter() });
+            var config = ApiBootstrap.CreateConfiguration(type => type == typeof(ExportService) ? exports : type == typeof(IBusinessBackups) ? _backups : type == typeof(BackupMaintenanceHandler) ? _maintenance : type == typeof(AlKhayal.Application.Delivery.DeliveryService) ? delivery : type == typeof(AlKhayal.Application.Alerts.AlertService) ? alerts : type == typeof(OperationLogService) ? operationLogs : type == typeof(AlKhayal.Application.Reports.OperationalReportService) ? operationalReports : type == typeof(AlKhayal.Application.Reports.BusinessOverviewService) ? businessOverview : type == typeof(AlKhayal.Application.Reports.StockReportService) ? stockReports : type == typeof(AlKhayal.Application.Reports.NetProfitService) ? netProfit : type == typeof(AlKhayal.Application.Reports.TransactionReportService) ? transactionReports : type == typeof(AlKhayal.Application.Reports.SalesReportService) ? salesReport : type == typeof(AlKhayal.Application.Payments.PaymentInstrumentService) ? paymentMethods : type == typeof(AlKhayal.Application.Printing.LabelService) ? labels : type == typeof(AlKhayal.Application.Catalog.BarcodeService) ? barcodes : type == typeof(AlKhayal.Application.Printing.PrintingService) ? printing : type == typeof(AlKhayal.Application.Workforce.WorkforceService) ? workforce : type == typeof(AuthService) ? auth : type == typeof(BusinessActivityService) ? activities : type == typeof(FeatureService) ? features : type == typeof(UserManagementService) ? userManagement : type == typeof(SettingsService) ? settings : type == typeof(CatalogService) ? catalog : type == typeof(InventoryService) ? inventory : type == typeof(CustomerService) ? customers : type == typeof(CustomerAccountService) ? accounts : type == typeof(InstallmentService) ? installments : type == typeof(MaintenanceService) ? maintenance : type == typeof(SupplierService) ? suppliers : type == typeof(SupplierAccountService) ? supplierAccounts : type == typeof(SupplierLedgerService) ? supplierLedger : type == typeof(PurchaseService) ? purchases : type == typeof(SalesService) ? sales : type == typeof(AlKhayal.Application.Treasury.TreasuryService) ? treasury : type == typeof(AlKhayal.Application.Expenses.ExpenseService) ? expenses : type == typeof(AlKhayal.Application.Returns.ReturnService) ? returns : null, licenseGate);
+
+            config.Services.Replace(typeof(System.Web.Http.Hosting.IHostBufferPolicySelector), new BackupBufferPolicy());
+            _backups.Start();
+            _server = WebApp.Start(options.Url, app =>
+            {
+                app.UseWebApi(config);
+                app.Use(async (context, next) =>
+                {
+                    if (IsRestoring)
+                    {
+                        context.Response.StatusCode = 503;
+                        context.Response.Headers.Set("Cache-Control", "no-store");
+                        return;
+                    }
+                    if (!licenseGate.Check().IsValid)
+                    {
+                        context.Response.StatusCode = 403;
+                        context.Response.ContentType = "application/json; charset=utf-8";
+                        context.Response.Headers.Set("Cache-Control", "no-store");
+                        await context.Response.WriteAsync("{\"success\":false,\"data\":null,\"error\":{\"code\":\"activation_required\",\"message\":\"يلزم تفعيل البرنامج على هذا الجهاز. التفعيل مجاني ودائم.\"}}");
+                        return;
+                    }
+                    await next();
+                });
+                if (!Directory.Exists(options.FrontendPath)) return;
+
+                var fileOptions = new Microsoft.Owin.StaticFiles.FileServerOptions
+                {
+                    EnableDefaultFiles = true,
+                    FileSystem = new Microsoft.Owin.FileSystems.PhysicalFileSystem(options.FrontendPath)
+                };
+                var contentTypes = new Microsoft.Owin.StaticFiles.ContentTypes.FileExtensionContentTypeProvider();
+                contentTypes.Mappings[".json"] = "application/json; charset=utf-8";
+                fileOptions.StaticFileOptions.ContentTypeProvider = contentTypes;
+                fileOptions.StaticFileOptions.OnPrepareResponse = context =>
+                {
+                    context.OwinContext.Response.Headers.Set("Cache-Control", "no-store, no-cache, must-revalidate");
+                    context.OwinContext.Response.Headers.Set("Pragma", "no-cache");
+                    context.OwinContext.Response.Headers.Set("Expires", "0");
+                };
+                app.UseFileServer(fileOptions);
+            });
+        }
+
+        internal static FileStream OpenDatabaseLease(HostOptions options)
+        {
+            var path = Path.GetFullPath(options.DatabasePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            return new FileStream(path + ".host-lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        }
+
+        public void Dispose()
+        {
+            try { Interlocked.Exchange(ref _server, null)?.Dispose(); }
+            finally
+            {
+                try { Interlocked.Exchange(ref _backups, null)?.Dispose(); }
+                finally { Interlocked.Exchange(ref _databaseLease, null)?.Dispose(); }
+            }
+        }
+    }
+
+    internal sealed class BackupBufferPolicy : System.Web.Http.Hosting.IHostBufferPolicySelector
+    {
+        private readonly System.Web.Http.Owin.OwinBufferPolicySelector defaults = new System.Web.Http.Owin.OwinBufferPolicySelector();
+
+        public bool UseBufferedInputStream(object hostContext)
+        {
+            if (hostContext is IOwinContext context &&
+                string.Equals(context.Request.Path.Value?.TrimEnd('/'), "/api/settings/backups/inspect", StringComparison.OrdinalIgnoreCase))
+                return false;
+            return defaults.UseBufferedInputStream(hostContext);
+        }
+
+        public bool UseBufferedOutputStream(System.Net.Http.HttpResponseMessage response) =>
+            response.Content is System.Net.Http.StreamContent && response.Content.Headers.ContentDisposition?.DispositionType == "attachment"
+                ? false : defaults.UseBufferedOutputStream(response);
+    }
+
+    public sealed class AlKhayalStartup
+    {
+        public void Configuration(IAppBuilder app) { }
+    }
+
+    public static class UserProvisioner
+    {
+        public static int Provision(HostOptions options, string username, string password)
+        {
+            if (string.IsNullOrWhiteSpace(username)) throw new InvalidOperationException("Username is required.");
+            if (string.IsNullOrEmpty(password)) throw new InvalidOperationException("Password cannot be empty.");
+
+            username = username.Trim();
+            using var lease = AlKhayalServer.OpenDatabaseLease(options);
+            var connectionString = Db.ConnectionStringFor(options.DatabasePath);
+            Migrator.Run(connectionString);
+            var users = new SqliteUserStore(connectionString);
+            var existing = users.FindByUsernameAsync(username, CancellationToken.None).GetAwaiter().GetResult();
+            if (existing != null) throw new InvalidOperationException("The requested username already exists.");
+
+            var passwordHash = new PasswordHasher().Hash(password);
+            users.CreateAsync(username, username, passwordHash, "administrator", CancellationToken.None).GetAwaiter().GetResult();
+            return 0;
+        }
+
+        public static int ResetPassword(HostOptions options, string username, string password)
+        {
+            if (string.IsNullOrWhiteSpace(username)) throw new InvalidOperationException("Username is required.");
+            if (string.IsNullOrEmpty(password)) throw new InvalidOperationException("Password cannot be empty.");
+
+            username = username.Trim();
+            using var lease = AlKhayalServer.OpenDatabaseLease(options);
+            var connectionString = Db.ConnectionStringFor(options.DatabasePath);
+            Migrator.Run(connectionString);
+            var users = new SqliteUserStore(connectionString);
+            var existing = users.FindByUsernameAsync(username, CancellationToken.None).GetAwaiter().GetResult();
+            if (existing == null) throw new InvalidOperationException("The requested username does not exist.");
+
+            var passwordHash = new PasswordHasher().Hash(password);
+            users.UpdatePasswordHashAsync(existing.Id, passwordHash, CancellationToken.None).GetAwaiter().GetResult();
+            return 0;
+        }
+    }
+
+    internal static class ConsoleSecretReader
+    {
+        public static string ReadPassword()
+        {
+            Console.Write("Password: ");
+            if (Console.IsInputRedirected)
+            {
+                var redirected = Console.ReadLine();
+                return redirected ?? string.Empty;
+            }
+
+            var password = new StringBuilder();
+            while (true)
+            {
+                var key = Console.ReadKey(true);
+                if (key.Key == ConsoleKey.Enter)
+                {
+                    Console.WriteLine();
+                    return password.ToString();
+                }
+                if (key.Key == ConsoleKey.Backspace)
+                {
+                    if (password.Length > 0) password.Length--;
+                    continue;
+                }
+                if (!char.IsControl(key.KeyChar)) password.Append(key.KeyChar);
+            }
+        }
+    }
+
+    public static class Program
+    {
+        [STAThread]
+        public static void Main(string[] args)
+        {
+            var options = new HostOptions();
+            if (args.Length > 0 &&
+                (args[0].Equals("--provision-user", StringComparison.OrdinalIgnoreCase) ||
+                 args[0].Equals("--provision-demo", StringComparison.OrdinalIgnoreCase)))
+            {
+                var username = args.Length > 1 ? args[1] : "demo";
+                UserProvisioner.Provision(options, username, ConsoleSecretReader.ReadPassword());
+                Console.WriteLine("User provisioned. The password was stored only as a salted PBKDF2 hash.");
+                return;
+            }
+            if (args.Length > 0 && args[0].Equals("--reset-password", StringComparison.OrdinalIgnoreCase))
+            {
+                if (args.Length < 2) throw new InvalidOperationException("Username is required for --reset-password.");
+                UserProvisioner.ResetPassword(options, args[1], ConsoleSecretReader.ReadPassword());
+                Console.WriteLine("Password reset. Only a new salted PBKDF2 hash was stored.");
+                return;
+            }
+
+            using (var server = new AlKhayalServer())
+            {
+                server.Start(options);
+                Console.WriteLine("AlKhayal API listening at " + options.Url);
+                using (var quit = new ManualResetEvent(false))
+                {
+                    Console.CancelKeyPress += (sender, eventArgs) =>
+                    {
+                        eventArgs.Cancel = true;
+                        quit.Set();
+                    };
+                    quit.WaitOne();
+                }
+            }
+        }
+    }
+}

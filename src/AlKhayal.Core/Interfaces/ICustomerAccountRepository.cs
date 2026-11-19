@@ -1,0 +1,12 @@
+using System.Collections.Generic;
+using AlKhayal.Core.Models;
+namespace AlKhayal.Core.Interfaces
+{
+    public interface ICustomerAccountRepository
+    {
+        CustomerPayment AddPayment(long customerId, decimal amount, string paymentDate, string method, string account, string notes, string operationKey, long? treasuryAccountId, long actor);
+        CustomerStatement GetStatement(long customerId, string from, string to);
+        List<CustomerPayment> GetPayments(long customerId);
+        CustomerStatementTransaction PostTransaction(long customerId, string type, decimal amount, string occurredOn, string notes, string operationKey, string method = null, long? treasuryAccountId = null, long actor = 0);
+    }
+}
