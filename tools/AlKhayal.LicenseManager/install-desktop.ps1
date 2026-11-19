@@ -1,5 +1,5 @@
 # Owner-only desktop deployment. Copies an explicit allowlist; never touches POS data or signing keys.
-param([string]$NodeExecutable='')
+param([string]$NodeExecutable='', [string]$PackageDirectory='')
 $ErrorActionPreference='Stop'
 $source=[IO.Path]::GetFullPath($PSScriptRoot)
 $repo=[IO.Path]::GetFullPath((Join-Path $source '..\..'))
@@ -10,12 +10,16 @@ $version=& $NodeExecutable --version
 if($version -notmatch '^v24\.'){throw 'Use the supported bundled Node 24 LTS runtime.'}
 & $NodeExecutable -e "const {DatabaseSync}=require('node:sqlite');const d=new DatabaseSync(':memory:');d.exec('CREATE TABLE probe(id INTEGER)');d.close();"
 if($LASTEXITCODE){throw 'Bundled SQLite runtime probe failed.'}
-$desktop=[Environment]::GetFolderPath([Environment+SpecialFolder]::DesktopDirectory)
-if(-not $desktop){throw 'Windows Desktop could not be resolved.'}
-$target=[IO.Path]::GetFullPath((Join-Path $desktop 'AlKhayal License Manager'))
-if(-not $target.StartsWith([IO.Path]::GetFullPath($desktop).TrimEnd('\')+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'Unexpected deployment target.'}
+if ($PackageDirectory) {
+    $target=[IO.Path]::GetFullPath($PackageDirectory)
+    if (Test-Path -LiteralPath $target) { throw 'Choose a new package directory.' }
+} else {
+    $desktop=[Environment]::GetFolderPath([Environment+SpecialFolder]::DesktopDirectory)
+    if(-not $desktop){throw 'Windows Desktop could not be resolved.'}
+    $target=Join-Path $desktop 'The Cashier License Manager'
+}
 New-Item -ItemType Directory -Force -Path $target,(Join-Path $target 'public'),(Join-Path $target 'runtime') | Out-Null
-$files=@('protocol.cjs','registry.cjs','server.cjs','launch.cjs','secure-storage.ps1','open-browser.vbs','error.vbs','AlKhayal License Manager.vbs','package.json')
+$files=@('protocol.cjs','registry.cjs','server.cjs','launch.cjs','secure-storage.ps1','open-browser.vbs','error.vbs','The Cashier License Manager.vbs','package.json')
 foreach($file in $files){Copy-Item -LiteralPath (Join-Path $source $file) -Destination (Join-Path $target $file) -Force}
 foreach($file in @('index.html','style.css','app.js')){Copy-Item -LiteralPath (Join-Path $source ('public\'+$file)) -Destination (Join-Path $target ('public\'+$file)) -Force}
 $runtimeTarget=Join-Path $target 'runtime\node.exe'
@@ -24,14 +28,15 @@ if(-not (Test-Path -LiteralPath $runtimeTarget) -or (Get-FileHash -LiteralPath $
 }
 $license=Join-Path ([IO.Path]::GetDirectoryName($NodeExecutable)) 'LICENSE'
 if(Test-Path -LiteralPath $license){Copy-Item -LiteralPath $license -Destination (Join-Path $target 'runtime\LICENSE') -Force}
-$launcher=Join-Path $desktop 'AlKhayal License Manager.lnk'
+Write-Output ('Owner tool: '+$target)
+if ($PackageDirectory) { return }
+$launcher=Join-Path $desktop 'The Cashier License Manager.lnk'
 $shell=New-Object -ComObject WScript.Shell
 $link=$shell.CreateShortcut($launcher)
 $link.TargetPath=Join-Path $env:SystemRoot 'System32\wscript.exe'
-$link.Arguments='"'+(Join-Path $target 'AlKhayal License Manager.vbs')+'"'
+$link.Arguments='"'+(Join-Path $target 'The Cashier License Manager.vbs')+'"'
 $link.WorkingDirectory=$target
-$link.Description='AlKhayal owner-only offline license registry'
+$link.Description='The Cashier owner-only offline license registry'
 $link.Save()
-Write-Output ('Desktop tool: '+$target)
 Write-Output ('Desktop launcher: '+$launcher)
-Write-Output ('Owner data: '+(Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'AlKhayalLicenseManager'))
+Write-Output ('Owner data: '+(Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'TheCashierLicenseManager'))

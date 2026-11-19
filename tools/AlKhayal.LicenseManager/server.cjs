@@ -29,7 +29,7 @@ async function startServer({dataDir,port=0,token=crypto.randomBytes(32).toString
         }
         const route=req.method+' '+url.pathname;
         switch(route) {
-          case 'GET /api/status':return send(200,{...registry.summary(),key:registry.keyStatus(),application:'AlKhayalLicenseManager'});
+          case 'GET /api/status':return send(200,{...registry.summary(),key:registry.keyStatus(),application:'TheCashierLicenseManager'});
           case 'GET /api/customers':return send(200,registry.customers(url.searchParams.get('search')||''));
           case 'POST /api/customers':return send(201,registry.addCustomer(input));
           case 'GET /api/history':return send(200,registry.history(url.searchParams.get('search')||''));

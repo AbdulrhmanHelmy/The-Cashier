@@ -95,11 +95,12 @@ namespace AlKhayal.Data.Backups
             try
             {
                 var folder = ConfiguredDirectory;
-                files = Directory.Exists(folder)
-                    ? new DirectoryInfo(folder).EnumerateFiles("*.alkbackup")
+                var diskFolder = ArchiveIoPath(folder);
+                files = Directory.Exists(diskFolder)
+                    ? new DirectoryInfo(diskFolder).EnumerateFiles("*.alkbackup")
                         .Where(file => string.Equals(file.Extension, ".alkbackup", StringComparison.OrdinalIgnoreCase)
                             && (file.Attributes & FileAttributes.ReparsePoint) == 0)
-                        .OrderByDescending(file => file.LastWriteTimeUtc).Take(100).Select(Describe).ToArray()
+                        .OrderByDescending(file => file.LastWriteTimeUtc).Take(100).Select(file => Describe(folder, file)).ToArray()
                     : Array.Empty<BackupFile>();
             }
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is BackupException || ex is ArgumentException)
@@ -126,8 +127,8 @@ namespace AlKhayal.Data.Backups
                 var folder = disablingCurrent ? state.Configuration.Directory : LocalFolder(configuration?.Directory);
                 if (!disablingCurrent)
                 {
-                    Directory.CreateDirectory(folder);
-                    var probe = Path.Combine(folder, Guid.NewGuid().ToString("N") + ".probe");
+                    Directory.CreateDirectory(ArchiveIoPath(folder));
+                    var probe = ArchiveIoPath(Path.Combine(folder, Guid.NewGuid().ToString("N") + ".probe"));
                     using (new FileStream(probe, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.DeleteOnClose)) { }
                 }
                 var updated = CopyState();
@@ -152,7 +153,7 @@ namespace AlKhayal.Data.Backups
             if (string.IsNullOrEmpty(name) || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || Path.GetFileName(name) != name ||
                 !string.Equals(Path.GetExtension(name), ".alkbackup", StringComparison.OrdinalIgnoreCase))
                 throw Invalid();
-            var path = Path.Combine(LocalFolder(state.Configuration.Directory), name);
+            var path = ArchiveIoPath(Path.Combine(LocalFolder(state.Configuration.Directory), name));
             if (!File.Exists(path) || (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
                 throw Invalid();
             return File.OpenRead(path);
@@ -169,7 +170,7 @@ namespace AlKhayal.Data.Backups
                 ClearPending();
                 workspace = NewWorkspace();
                 var archive = workspace.File("upload.alkbackup");
-                var staged = workspace.File("restore.sqlite");
+                var staged = workspace.File(Workspace.Restore);
                 using (var output = new FileStream(archive, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, true))
                 {
                     var buffer = new byte[81920];
@@ -207,7 +208,7 @@ namespace AlKhayal.Data.Backups
                 !string.Equals(confirmation, pendingRestore.Manifest.Confirmation, StringComparison.Ordinal))
                 throw new BackupException("انتهت صلاحية التأكيد أو تغير الملف. افحص النسخة وأكد الاستعادة مجددًا.");
 
-            var staged = pendingRestore.Workspace.File("restore.sqlite");
+            var staged = pendingRestore.Workspace.File(Workspace.Restore);
             try
             {
                 if (Hash(staged) != pendingRestore.Manifest.Sha256) throw Invalid();
@@ -327,19 +328,22 @@ namespace AlKhayal.Data.Backups
         private BackupFile FindPublishedAutomatic(string folder, string day)
         {
             folder = LocalFolder(folder);
-            if (!Directory.Exists(folder)) return null;
+            var diskFolder = ArchiveIoPath(folder);
+            if (!Directory.Exists(diskFolder)) return null;
             var prefix = AutoPrefix + day.Replace("-", "") + "-";
-            foreach (var file in new DirectoryInfo(folder).EnumerateFiles(prefix + "*.alkbackup"))
+            foreach (var file in new DirectoryInfo(diskFolder).EnumerateFiles(prefix + "*.alkbackup"))
             {
                 if ((file.Attributes & FileAttributes.ReparsePoint) != 0) continue;
                 try
                 {
                     using (var workspace = NewWorkspace())
                     {
-                        var staged = workspace.File("verify.sqlite");
-                        var manifest = Extract(file.FullName, staged);
+                        var staged = workspace.File(Workspace.Verification);
+                        var manifest = Extract(ArchiveIoPath(Path.Combine(folder, file.Name)), staged);
                         ValidateAgainstLive(staged, manifest);
-                        return new BackupFile { Name = file.Name, Path = file.FullName, Size = file.Length, CreatedUtc = manifest.CreatedUtc };
+                        var result = Describe(folder, file);
+                        result.CreatedUtc = manifest.CreatedUtc;
+                        return result;
                     }
                 }
                 catch (Exception ex) when (ex is BackupException || ex is IOException || ex is InvalidDataException ||
@@ -353,12 +357,13 @@ namespace AlKhayal.Data.Backups
         {
             try
             {
-                var files = new DirectoryInfo(LocalFolder(state.Configuration.Directory))
+                var folder = LocalFolder(state.Configuration.Directory);
+                var files = new DirectoryInfo(ArchiveIoPath(folder))
                     .EnumerateFiles(AutoPrefix + "*.alkbackup")
                     .Where(file => (file.Attributes & FileAttributes.ReparsePoint) == 0)
-                    .Where(file => !string.Equals(file.FullName, state.LastSuccess.Path, StringComparison.OrdinalIgnoreCase))
+                    .Where(file => !string.Equals(Path.Combine(folder, file.Name), state.LastSuccess.Path, StringComparison.OrdinalIgnoreCase))
                     .OrderByDescending(file => file.Name, StringComparer.Ordinal).Skip(6).ToArray();
-                foreach (var file in files) file.Delete();
+                foreach (var file in files) File.Delete(ArchiveIoPath(Path.Combine(folder, file.Name)));
             }
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is BackupException)
             { Trace.TraceWarning("Automatic backup retention failed: {0}", ex.GetType().Name); }
@@ -367,18 +372,18 @@ namespace AlKhayal.Data.Backups
         private BackupFile Publish(string kind, string folder, string day = null)
         {
             folder = LocalFolder(folder);
-            Directory.CreateDirectory(folder);
+            Directory.CreateDirectory(ArchiveIoPath(folder));
             var id = Guid.NewGuid();
             var now = utcNow();
             var name = (day == null ? "alkhayal-" + kind + "-" : AutoPrefix + day.Replace("-", "") + "-") +
                 now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) + "-" + id.ToString("N") + ".alkbackup";
             var final = Path.Combine(folder, name);
-            var pending = final + ".tmp";
+            var pending = ArchiveIoPath(final + ".tmp");
             var ownsPending = false;
             using (var workspace = NewWorkspace())
             {
-                var snapshot = workspace.File("snapshot.sqlite");
-                var verification = workspace.File("verify.sqlite");
+                var snapshot = workspace.File(Workspace.Snapshot);
+                var verification = workspace.File(Workspace.Verification);
                 try
                 {
                     string schema;
@@ -414,7 +419,7 @@ namespace AlKhayal.Data.Backups
                     Extract(pending, verification);
                     using (var validated = Open(verification, true)) CheckIntegrity(validated);
                     var size = new FileInfo(pending).Length;
-                    File.Move(pending, final);
+                    File.Move(pending, ArchiveIoPath(final));
                     ownsPending = false;
                     return new BackupFile { Name = name, Path = final, CreatedUtc = now, Size = size };
                 }
@@ -566,8 +571,12 @@ namespace AlKhayal.Data.Backups
 
         private Workspace NewWorkspace()
         {
+            var path = Path.Combine(work, Guid.NewGuid().ToString("N"));
+            // SQLite's Windows VFS also needs room for its rollback journal.
+            if (Path.Combine(path, Workspace.Snapshot + "-journal").Length >= 260)
+                throw new BackupException("مسار قاعدة البيانات طويل جدًا لإنشاء ملفات النسخ المؤقتة. اختر موقعًا محليًا أقصر لقاعدة البيانات.");
             Directory.CreateDirectory(LocalFolder(work));
-            return new Workspace(Path.Combine(work, Guid.NewGuid().ToString("N")));
+            return new Workspace(path);
         }
 
         private static string LocalFolder(string path)
@@ -579,7 +588,7 @@ namespace AlKhayal.Data.Backups
             var drive = new DriveInfo(Path.GetPathRoot(full));
             if (drive.DriveType == DriveType.Network)
                 throw new BackupException("اختر قرصًا محليًا أو خارجيًا متصلًا بجهاز الخادم.");
-            for (var parent = new DirectoryInfo(full); parent != null; parent = parent.Parent)
+            for (var parent = new DirectoryInfo(ArchiveIoPath(full)); parent != null; parent = parent.Parent)
                 if (parent.Exists && (parent.Attributes & FileAttributes.ReparsePoint) != 0)
                     throw new BackupException("اختر مجلدًا محليًا مباشرًا دون ارتباطات إلى مجلدات أخرى.");
             return full;
@@ -634,8 +643,12 @@ namespace AlKhayal.Data.Backups
         private static string Json(object value) => new JavaScriptSerializer().Serialize(value);
         private static T ReadJson<T>(string value) => new JavaScriptSerializer { RecursionLimit = 8 }.Deserialize<T>(value);
         private static BackupException Invalid() => new BackupException("ملف النسخة غير صالح أو تالف أو يتجاوز الحد المسموح.");
-        private static BackupFile Describe(FileInfo file) => new BackupFile
-        { Name = file.Name, Path = file.FullName, Size = file.Length, CreatedUtc = file.LastWriteTimeUtc };
+        // LocalFolder has already validated and normalized an absolute local path.
+        // Keep the extended path syntax at the Windows archive I/O boundary.
+        private static string ArchiveIoPath(string path) => @"\\?\" + path;
+
+        private static BackupFile Describe(string folder, FileInfo file) => new BackupFile
+        { Name = file.Name, Path = Path.Combine(folder, file.Name), Size = file.Length, CreatedUtc = file.LastWriteTimeUtc };
 
         private static void DeleteTemporary(string path)
         {
@@ -663,6 +676,9 @@ namespace AlKhayal.Data.Backups
 
         private sealed class Workspace : IDisposable
         {
+            public const string Snapshot = "s";
+            public const string Verification = "v";
+            public const string Restore = "r";
             private readonly string path;
             public Workspace(string path) { this.path = path; Directory.CreateDirectory(path); }
             public string File(string name) => Path.Combine(path, name);
@@ -670,7 +686,8 @@ namespace AlKhayal.Data.Backups
             {
                 try
                 {
-                    foreach (var name in new[] { "snapshot.sqlite", "verify.sqlite", "restore.sqlite", "upload.alkbackup" })
+                    foreach (var name in new[] { Snapshot, Verification, Restore, "upload.alkbackup",
+                        "snapshot.sqlite", "verify.sqlite", "restore.sqlite" })
                         foreach (var suffix in new[] { "", "-wal", "-shm", "-journal" })
                             DeleteTemporary(File(name + suffix));
                     Directory.Delete(path);

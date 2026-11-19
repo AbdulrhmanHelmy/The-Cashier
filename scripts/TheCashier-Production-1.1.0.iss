@@ -1,5 +1,7 @@
 #define AppVersion "1.1.0"
+#ifndef ReleaseRoot
 #define ReleaseRoot "E:\The Cashier\artifacts\release-1.1.0"
+#endif
 
 [Setup]
 AppId={{12CF3562-C3F5-42B2-B5C4-48D2B9F3A8E1}

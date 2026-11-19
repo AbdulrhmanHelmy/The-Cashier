@@ -34,7 +34,8 @@ namespace AlKhayal.IntegrationTests
     public sealed class BusinessBackupTests : IDisposable
     {
         private const string TrialMarker = "do-not-export-source-trial";
-        private readonly string root = Path.Combine(Path.GetTempPath(), "alk-backup-tests-" + Guid.NewGuid().ToString("N"));
+        private readonly string root = Path.Combine(Environment.GetEnvironmentVariable("THECASHIER_BACKUP_TEST_TEMP") ?? Path.GetTempPath(),
+            "alk-backup-tests-" + Guid.NewGuid().ToString("N"));
         private readonly string source;
         private readonly string destination;
 
@@ -76,7 +77,7 @@ namespace AlKhayal.IntegrationTests
             Assert.NotEqual(first.Path, second.Path);
             Assert.Equal(2, Directory.GetFiles(Path.GetDirectoryName(first.Path)).Length);
             var extracted = Path.Combine(root, "extracted.db");
-            using (var stream = File.OpenRead(first.Path))
+            using (var stream = File.OpenRead(FixtureIoPath(first.Path)))
             using (var zip = new ZipArchive(stream, ZipArchiveMode.Read))
             using (var input = zip.GetEntry("business.sqlite").Open())
             using (var output = File.Create(extracted))
@@ -95,11 +96,11 @@ namespace AlKhayal.IntegrationTests
             Assert.DoesNotContain("source-session", raw);
 
             using var restore = new SqliteBusinessBackups(destination);
-            using var archive = File.OpenRead(first.Path);
+            using var archive = await backup.DownloadAsync(first.Name);
             var manifest = await restore.InspectAsync(archive, CancellationToken.None);
             await Assert.ThrowsAsync<BackupException>(() => restore.RestoreAsync(Guid.NewGuid().ToString("N"), CancellationToken.None));
             var emergency = await restore.RestoreAsync(manifest.Confirmation, CancellationToken.None);
-            Assert.True(File.Exists(emergency.Path));
+            Assert.True(File.Exists(FixtureIoPath(emergency.Path)));
             using var result = Open(destination);
             Assert.Equal("from-backup", result.ExecuteScalar<string>("SELECT Username FROM Users"));
             Assert.Equal("نسخة الاختبار", result.ExecuteScalar<string>("SELECT Name FROM Products"));
@@ -107,7 +108,7 @@ namespace AlKhayal.IntegrationTests
             Assert.Equal(destinationTrial, result.ExecuteScalar<string>("SELECT Status FROM TrialState"));
             Assert.Equal(destinationTrial == null ? null : "destination-trial", result.ExecuteScalar<string>("SELECT DeviceFingerprint FROM TrialState"));
             Assert.Equal(TrialMarker, writer.ExecuteScalar<string>("SELECT DeviceFingerprint FROM TrialState"));
-            using var recovery = File.OpenRead(emergency.Path);
+            using var recovery = File.OpenRead(FixtureIoPath(emergency.Path));
             var verifiedRecovery = await restore.InspectAsync(recovery, CancellationToken.None);
             Assert.NotEqual(Guid.Empty, verifiedRecovery.Id);
         }
@@ -153,7 +154,7 @@ namespace AlKhayal.IntegrationTests
             using var producer = new SqliteBusinessBackups(source);
             var file = await producer.CreateAsync(Path.Combine(root, "CustomManual"));
             using var consumer = new SqliteBusinessBackups(destination);
-            using var stream = File.OpenRead(file.Path);
+            using var stream = File.OpenRead(FixtureIoPath(file.Path));
             var preview = await consumer.InspectAsync(stream, CancellationToken.None);
             await consumer.RestoreAsync(preview.Confirmation, CancellationToken.None);
 
@@ -191,7 +192,7 @@ namespace AlKhayal.IntegrationTests
                 using var producer = new SqliteBusinessBackups(source);
                 var archive = await producer.CreateAsync();
                 using var consumer = new SqliteBusinessBackups(destination);
-                using var input = File.OpenRead(archive.Path);
+                using var input = File.OpenRead(FixtureIoPath(archive.Path));
                 var preview = await consumer.InspectAsync(input, CancellationToken.None);
                 await consumer.RestoreAsync(preview.Confirmation, CancellationToken.None);
 
@@ -226,7 +227,7 @@ namespace AlKhayal.IntegrationTests
             using var current = Open(destination);
             InsertTrial(current, "keep", "Expired");
             using var bad = new MemoryStream();
-            using (var input = File.OpenRead(valid.Path))
+            using (var input = File.OpenRead(FixtureIoPath(valid.Path)))
             using (var original = new ZipArchive(input, ZipArchiveMode.Read))
             using (var copy = new ZipArchive(bad, ZipArchiveMode.Create, true))
             {
@@ -272,14 +273,24 @@ namespace AlKhayal.IntegrationTests
             var attempts = await Task.WhenAll(service.RunScheduledAsync(), service.RunScheduledAsync());
             Assert.Single(attempts, success => success);
             var manual = await service.CreateAsync();
+            BackupFile foreign;
+            using (var otherInstallation = new SqliteBusinessBackups(destination, () => now.AddDays(-1)))
+            {
+                await otherInstallation.ConfigureAsync(config);
+                Assert.True(await otherInstallation.RunScheduledAsync());
+                foreign = (await otherInstallation.StatusAsync()).LastSuccess;
+            }
             for (var day = 0; day < 8; day++)
             {
                 now = now.AddDays(1);
                 Assert.True(await service.RunScheduledAsync());
                 Assert.False(await service.RunScheduledAsync());
             }
-            Assert.Equal(7, Directory.GetFiles(folder, "alkhayal-auto-*.alkbackup").Length);
-            Assert.True(File.Exists(manual.Path));
+            var automatic = Directory.GetFiles(folder, "alkhayal-auto-*.alkbackup");
+            Assert.Contains(foreign.Path, automatic);
+            Assert.Equal(7, automatic.Count(path => path != foreign.Path));
+            Assert.True(File.Exists(FixtureIoPath(manual.Path)));
+            Assert.Empty(Directory.GetFiles(folder, "*.tmp"));
             using var restarted = new SqliteBusinessBackups(source, () => now);
             Assert.False(await restarted.RunScheduledAsync());
             Assert.True((await restarted.StatusAsync()).Configuration.Enabled);
@@ -316,7 +327,7 @@ namespace AlKhayal.IntegrationTests
             var file = await service.CreateAsync();
             using var restore = new SqliteBusinessBackups(destination);
             await SeedUser(destination, "retained", "administrator");
-            using var stream = File.OpenRead(file.Path);
+            using var stream = File.OpenRead(FixtureIoPath(file.Path));
             var manifest = await restore.InspectAsync(stream, CancellationToken.None);
             File.WriteAllText(Path.Combine(root, "RestoreRecovery"), "blocked");
             await Assert.ThrowsAnyAsync<IOException>(() => restore.RestoreAsync(manifest.Confirmation, CancellationToken.None));
@@ -374,7 +385,7 @@ namespace AlKhayal.IntegrationTests
             var inspected = await Data(await admin.PostAsync(route + "/inspect", upload));
             var restored = await admin.PostAsync(route + "/restore", Json(new { confirmation = (string)inspected["confirmation"] }));
             var recovery = await Data(restored);
-            Assert.True(File.Exists((string)recovery["path"]));
+            Assert.True(File.Exists(FixtureIoPath((string)recovery["path"])));
             Assert.True(license.Check().IsValid);
             Assert.Equal(originalLicense, File.ReadAllBytes(licensePath));
             Assert.Equal(HttpStatusCode.Unauthorized, (await admin.GetAsync("api/auth/me")).StatusCode);
@@ -421,10 +432,13 @@ namespace AlKhayal.IntegrationTests
             c.Execute(@"INSERT INTO TrialState VALUES (1,'trial',@fingerprint,'2026-11-01','2026-11-06',
                 '2026-11-05','2026-11-05',@status,23,'protected-proof')", new { fingerprint, status });
 
+        private static string FixtureIoPath(string path, bool force = false) =>
+            force || path.Length >= 248 ? @"\\?\" + path : path;
+
         public void Dispose()
         {
             SQLiteConnection.ClearAllPools();
-            Directory.Delete(root, true);
+            Directory.Delete(FixtureIoPath(root, force: true), true);
         }
 
         private sealed class TrialClock : ITrialClock

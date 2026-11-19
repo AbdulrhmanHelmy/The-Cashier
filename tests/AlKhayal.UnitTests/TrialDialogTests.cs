@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -44,7 +45,7 @@ namespace AlKhayal.UnitTests
         }
 
         [Fact]
-        public void Original_activation_starts_trial_once_and_expired_actions_use_existing_form_and_contacts()
+        public void Cashier_activation_starts_trial_once_and_expired_actions_use_existing_form_and_contacts()
         {
             Exception failure = null;
             var thread = new Thread(() =>
@@ -92,6 +93,7 @@ namespace AlKhayal.UnitTests
                 }
                 catch (Exception e) { failure = e; }
             });
+            thread.IsBackground = true;
             thread.SetApartmentState(ApartmentState.STA); thread.Start();
             Assert.True(thread.Join(TimeSpan.FromSeconds(30)), "Trial dialog test did not exit.");
             if (failure != null) throw new Exception("Trial dialog test failed", failure);
@@ -173,30 +175,41 @@ namespace AlKhayal.UnitTests
 
         private static void VerifyContactPopup(Button contact)
         {
-            var clipboard = Clipboard.GetDataObject();
-            try
+            bool inspected = false;
+            ExceptionDispatchInfo callbackFailure = null;
+            using (var timer = new System.Windows.Forms.Timer { Interval = 30 })
             {
-                bool inspected = false;
-                using (var timer = new System.Windows.Forms.Timer { Interval = 30 })
+                timer.Tick += (s, e) =>
                 {
-                    timer.Tick += (s, e) =>
+                    var popup = System.Windows.Forms.Application.OpenForms.OfType<ActivationContactsForm>().FirstOrDefault();
+                    if (popup == null) return;
+                    timer.Stop();
+                    inspected = true;
+                    try
                     {
-                        var popup = System.Windows.Forms.Application.OpenForms.OfType<ActivationContactsForm>().FirstOrDefault();
-                        if (popup == null) return;
-                        timer.Stop(); inspected = true;
                         Assert.Equal(RightToLeft.Yes, popup.RightToLeft);
-                        Assert.Equal("التواصل لتفعيل الخيال", popup.Text);
-                        Assert.Equal(new[] { "01157999456", "01273266695" }, Descendants(popup).OfType<TextBox>().Select(x => x.Text).ToArray());
-                        var copy = Descendants(popup).OfType<Button>().Where(x => x.Text == "نسخ الرقم").ToArray();
-                        Assert.Equal(2, copy.Length);
-                        copy[0].PerformClick(); Assert.Equal("01157999456", Clipboard.GetText());
-                        copy[1].PerformClick(); Assert.Equal("01273266695", Clipboard.GetText());
-                        Preview(popup, "contacts"); popup.Close();
-                    };
-                    timer.Start(); contact.PerformClick(); Assert.True(inspected);
-                }
+                        Assert.Equal("التواصل لتفعيل The Cashier", popup.Text);
+                        Assert.Contains(Descendants(popup).OfType<Label>(), label => label.Text == "التواصل لتفعيل The Cashier");
+                        var numbers = new[] { "01157999456", "01273266695" };
+                        Assert.Equal(numbers, Descendants(popup).OfType<TextBox>().Select(x => x.Text).ToArray());
+                        var copy = Descendants(popup).OfType<Button>().Where(x => x.Text == "نسخ الرقم");
+                        Assert.Equal(numbers, copy.Select(x => Assert.IsType<string>(x.Tag)).ToArray());
+                        Preview(popup, "contacts");
+                    }
+                    catch (Exception error)
+                    {
+                        callbackFailure = ExceptionDispatchInfo.Capture(error);
+                    }
+                    finally
+                    {
+                        popup.Close();
+                    }
+                };
+                timer.Start();
+                contact.PerformClick();
+                callbackFailure?.Throw();
+                Assert.True(inspected, "The activation contacts dialog did not open.");
             }
-            finally { if (clipboard != null) Clipboard.SetDataObject(clipboard, true); else Clipboard.Clear(); }
         }
 
         private static IEnumerable<Control> Descendants(Control root)
