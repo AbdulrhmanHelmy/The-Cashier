@@ -14,18 +14,18 @@ module.exports=async function(){
   var A=win.AlKhayalAlerts,first=A.load(),second=A.load();assert.strictEqual(first,second);assert.equal(calls.length,1);
   pending.shift().resolve([{id:"stock:1",type:"low-stock",productName:"سكر",totalQuantity:"10",unit:"قطعة",reorderPoint:"10"}]);await first;
   assert.equal(A.count(),1);assert.equal(A.rows().length,1);await A.load();assert.equal(calls.length,1,"cached reads make no request");
-  // Badge is rendered on the existing quick access icon and follows the unified count.
-  var app=fs.readFileSync(path.join(root,"js/app.js"),"utf8"),badge={setAttribute:function(k,v){this[k]=v;}},menuBadge={setAttribute:function(k,v){this[k]=v;}};
+  // Badge is rendered on the dedicated header notification button and follows the unified count.
+  var app=fs.readFileSync(path.join(root,"js/app.js"),"utf8"),badge={setAttribute:function(k,v){this[k]=v;}},alertButton={setAttribute:function(k,v){this[k]=v;}};
   assert.ok(app.indexOf('data-alert-count')>=0);
-  vm.runInNewContext(app.slice(app.indexOf('  function updateAlertBadge()'),app.indexOf('  window.addEventListener("alkhayal:alerts-changed"'))+'updateAlertBadge();',{quickbar:{querySelectorAll:function(){return [badge,menuBadge];}},window:win});
-  assert.equal(badge.textContent,"1");assert.equal(badge.hidden,false);assert.equal(menuBadge.textContent,"1","overflow alert badge shares the live count");
+  vm.runInNewContext(app.slice(app.indexOf('  function updateAlertBadge()'),app.indexOf('  window.addEventListener("alkhayal:alerts-changed"'))+'updateAlertBadge();',{document:{querySelectorAll:function(){return [badge];},getElementById:function(){return alertButton;}},window:win});
+  assert.equal(badge.textContent,"1");assert.equal(badge.hidden,false);assert.ok(alertButton["aria-label"].includes("1"),"bell accessible name includes the unread count");
   function emit(type,detail){win.dispatchEvent({type:type,detail:detail});}
   ["/api/settings/company","/api/sales/drafts","/api/sales/1","/api/sales/1/payments","/api/catalog/categories","/api/inventory/warehouses"].forEach(function(path){emit("alkhayal:data-changed",{path:path});});await new Promise(function(r){setTimeout(r,5);});assert.equal(calls.length,1,"unrelated writes do not query alerts");
   emit("alkhayal:data-changed",{path:"/api/inventory/post"});emit("alkhayal:data-changed",{path:"/api/sales/1/post"});await new Promise(function(r){setTimeout(r,5);});assert.equal(calls.length,2,"same tick mutations coalesce");
   pending.shift().resolve([]);await A.load();assert.equal(A.rows().length,0);
   A.invalidate();await new Promise(function(r){setTimeout(r,5);});  pending.shift().resolve([{id:"stock:1",type:"low-stock",title:"انتهى المخزون",detail:"0",severity:"خطر",read:false}]);await A.load();assert.equal(A.count(),1,"resolved and returning stock alert is unread again");
   var marked=A.markAll();assert.equal(calls[calls.length-1],"/api/alerts/read-all");pending.shift().resolve(null);await new Promise(function(r){setTimeout(r,5);});pending.shift().resolve([{id:"stock:1",type:"low-stock",read:true}]);await marked;assert.equal(A.count(),0,"mark all reloads persisted state before settling");
-  vm.runInNewContext(app.slice(app.indexOf('  function updateAlertBadge()'),app.indexOf('  window.addEventListener("alkhayal:alerts-changed"'))+'updateAlertBadge();',{quickbar:{querySelectorAll:function(){return [badge,menuBadge];}},window:win});assert.equal(badge.hidden,true,"badge hides when every current alert is read");assert.equal(menuBadge.hidden,true);
+  vm.runInNewContext(app.slice(app.indexOf('  function updateAlertBadge()'),app.indexOf('  window.addEventListener("alkhayal:alerts-changed"'))+'updateAlertBadge();',{document:{querySelectorAll:function(){return [badge];},getElementById:function(){return alertButton;}},window:win});assert.equal(badge.hidden,true,"badge hides when every current alert is read");assert.equal(alertButton["aria-label"],"التنبيهات");
   permissions=["reorder-alert"];emit("alkhayal:access-changed");await new Promise(function(r){setTimeout(r,5);});pending.shift().resolve([{id:"stock:2",type:"low-stock",productName:"صنف",totalQuantity:"0",unit:"قطعة",reorderPoint:"1"}]);await A.load();
   assert.equal(A.rows().length,1,"legacy stock-only grant cannot expose expiry or other notifications");
   permissions=[];emit("alkhayal:access-changed");await new Promise(function(r){setTimeout(r,5);});assert.equal(A.rows().length,0);

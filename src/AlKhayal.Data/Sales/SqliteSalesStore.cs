@@ -55,8 +55,52 @@ namespace AlKhayal.Data.Sales
         }
         public async Task<SaleInvoice> GetAsync(long id,CancellationToken ct)
         {using(var c=Open()){var row=await c.QuerySingleOrDefaultAsync<SaleInvoice>(Cmd(HeaderQuery+" WHERE si.Id=@Id AND NOT EXISTS(SELECT 1 FROM SalesDraftDeletions dd WHERE dd.SalesInvoiceId=si.Id)",new{Id=id},null,ct)).ConfigureAwait(false);if(row==null)return null;row.Delivery=await DeliveryAsync(c,null,id,ct).ConfigureAwait(false);row.Lines=await LinesAsync(c,null,id,ct).ConfigureAwait(false);row.Returns=(await c.QueryAsync<SaleReturnSummary>(new CommandDefinition("SELECT Id,ReturnNumber,TotalScaled,CashRefundScaled,CreditReductionScaled,Reason,CreatedUtc FROM SalesReturns WHERE SalesInvoiceId=@Id ORDER BY Id",new{Id=id},cancellationToken:ct)).ConfigureAwait(false)).ToList();return row;}}
-        public async Task<IReadOnlyList<SaleInvoice>> ListAsync(string search,string from,string to,CancellationToken ct)
-        {using(var c=Open()){var rows=(await c.QueryAsync<SaleInvoice>(new CommandDefinition(HeaderQuery+@" WHERE NOT EXISTS(SELECT 1 FROM SalesDraftDeletions dd WHERE dd.SalesInvoiceId=si.Id) AND NOT EXISTS(SELECT 1 FROM SalesInvoiceCorrections correction WHERE correction.PreviousInvoiceId=si.Id) AND (@Search IS NULL OR COALESCE(root.InvoiceNumber,si.InvoiceNumber) LIKE @Like OR COALESCE(c.Name,'') LIKE @Like) AND (@From IS NULL OR si.InvoiceDate>=@From) AND (@To IS NULL OR si.InvoiceDate<=@To) ORDER BY si.Id DESC LIMIT 500",new{Search=string.IsNullOrWhiteSpace(search)?null:search,Like="%"+(search??"")+"%",From=from,To=to},cancellationToken:ct)).ConfigureAwait(false)).ToList();return rows;}}
+        public async Task<IReadOnlyList<SaleInvoice>> ListAsync(string search,string from,string to,CancellationToken ct,int? searchLimit=null)
+        {using(var c=Open()){var rows=(await c.QueryAsync<SaleInvoice>(new CommandDefinition(HeaderQuery+@" WHERE NOT EXISTS(SELECT 1 FROM SalesDraftDeletions dd WHERE dd.SalesInvoiceId=si.Id) AND NOT EXISTS(SELECT 1 FROM SalesInvoiceCorrections correction WHERE correction.PreviousInvoiceId=si.Id) AND (@Search IS NULL OR COALESCE(root.InvoiceNumber,si.InvoiceNumber) LIKE @Like OR COALESCE(c.Name,'') LIKE @Like) AND (@From IS NULL OR si.InvoiceDate>=@From) AND (@To IS NULL OR si.InvoiceDate<=@To) ORDER BY CASE WHEN @Rank=1 AND COALESCE(root.InvoiceNumber,si.InvoiceNumber)=@Search COLLATE NOCASE THEN 0 ELSE 1 END,si.Id DESC LIMIT @Limit",new{Limit=searchLimit??500,Rank=searchLimit.HasValue?1:0,Search=string.IsNullOrWhiteSpace(search)?null:search,Like="%"+(search??"")+"%",From=from,To=to},cancellationToken:ct)).ConfigureAwait(false)).ToList();return rows;}}
+        public Task<SaleInvoicePage> ListPageAsync(string search, long page, int pageSize, CancellationToken ct)
+        {
+            // System.Data.SQLite can execute async commands synchronously. Keep this read off the request thread.
+            return Task.Run(async () =>
+            {
+                ct.ThrowIfCancellationRequested();
+                using (var c = Open())
+                using (var tx = c.BeginTransaction(System.Data.IsolationLevel.ReadCommitted))
+                {
+                    const string visible = @" WHERE NOT EXISTS(SELECT 1 FROM SalesDraftDeletions dd WHERE dd.SalesInvoiceId=si.Id)
+                        AND NOT EXISTS(SELECT 1 FROM SalesInvoiceCorrections correction WHERE correction.PreviousInvoiceId=si.Id)";
+                    var hasSearch = !string.IsNullOrWhiteSpace(search);
+                    var source = " FROM SalesInvoices si" + (hasSearch
+                        ? " LEFT JOIN SalesInvoices root ON root.Id=si.RootInvoiceId LEFT JOIN Customers c ON c.Id=si.CustomerId"
+                        : "") + visible + (hasSearch
+                        ? " AND (COALESCE(root.InvoiceNumber,si.InvoiceNumber) LIKE @Like OR COALESCE(c.Name,'') LIKE @Like)"
+                        : "");
+                    var like = "%" + search + "%";
+                    // Count the full table directly, then subtract each hidden invoice once.
+                    // CROSS JOIN keeps SQLite on the small exclusion sets even without planner statistics.
+                    const string unfilteredCount = @"SELECT
+                        (SELECT COUNT(*) FROM SalesInvoices)
+                        - (SELECT COUNT(*) FROM SalesDraftDeletions dd CROSS JOIN SalesInvoices i ON i.Id=dd.SalesInvoiceId)
+                        - (SELECT COUNT(*) FROM SalesInvoiceCorrections correction CROSS JOIN SalesInvoices i ON i.Id=correction.PreviousInvoiceId
+                           WHERE NOT EXISTS (SELECT 1 FROM SalesDraftDeletions dd WHERE dd.SalesInvoiceId=i.Id))";
+                    var countSql = hasSearch ? "SELECT COUNT(*)" + source : unfilteredCount;
+                    var count = await c.ExecuteScalarAsync<long>(Cmd(countSql, new { Like = like }, tx, ct)).ConfigureAwait(false);
+                    var lastPage = Math.Max(1, count / pageSize + (count % pageSize == 0 ? 0 : 1));
+                    var currentPage = Math.Min(page, lastPage);
+                    IReadOnlyList<SaleInvoice> items = Array.Empty<SaleInvoice>();
+                    if (count != 0)
+                    {
+                        var sql = HeaderQuery + " WHERE si.Id IN (SELECT si.Id" + source
+                            + " ORDER BY si.Id DESC LIMIT @Limit OFFSET @Offset) ORDER BY si.Id DESC";
+                        items = (await c.QueryAsync<SaleInvoice>(Cmd(sql,
+                            new { Like = like, Limit = pageSize, Offset = (currentPage - 1) * pageSize }, tx, ct))
+                            .ConfigureAwait(false)).AsList();
+                    }
+                    tx.Commit();
+                    return new SaleInvoicePage { Items = items, TotalCount = count, Page = currentPage, PageSize = pageSize };
+                }
+            }, ct);
+        }
+
         public async Task<long> CountSuspendedAsync(CancellationToken ct)
         {using(var c=Open()){return await c.ExecuteScalarAsync<long>(new CommandDefinition(@"SELECT COUNT(*) FROM SalesInvoices si WHERE si.Status='draft' AND NOT EXISTS(SELECT 1 FROM SalesCancellations cancellation WHERE cancellation.SalesInvoiceId=si.Id) AND NOT EXISTS(SELECT 1 FROM SalesDraftDeletions dd WHERE dd.SalesInvoiceId=si.Id) AND NOT EXISTS(SELECT 1 FROM SalesInvoiceCorrections correction WHERE correction.PreviousInvoiceId=si.Id)",cancellationToken:ct)).ConfigureAwait(false);}}
         private const string HeaderQuery=@"SELECT EXISTS(SELECT 1 FROM SalesReturns sr WHERE sr.SalesInvoiceId=si.Id) HasReturns,EXISTS(SELECT 1 FROM SalesReturns sr WHERE sr.SalesInvoiceId=si.Id) AND NOT EXISTS(SELECT 1 FROM SalesInvoiceLines sl WHERE sl.SalesInvoiceId=si.Id AND sl.QuantityScaled>COALESCE((SELECT SUM(rl.QuantityScaled) FROM SalesReturnLines rl WHERE rl.SalesInvoiceLineId=sl.Id),0)) IsFullyReturned,si.Id,COALESCE(root.InvoiceNumber,si.InvoiceNumber) InvoiceNumber,si.InvoiceDate,si.PostedUtc,si.CustomerId,c.Name CustomerName,si.WarehouseId,w.Name WarehouseName,si.CashierUserId,u.DisplayName CashierName,CASE WHEN EXISTS(SELECT 1 FROM SalesCancellations sc WHERE sc.SalesInvoiceId=si.Id) THEN 'canceled' ELSE si.Status END Status,si.PaymentMode,COALESCE(ps.Method,si.PaymentMode) ImmediateMethod,ps.InstrumentId PaymentInstrumentId,pi.Name PaymentInstrumentName,si.SubtotalScaled,si.DiscountScaled,si.TaxScaled,si.TotalScaled,si.PaidScaled,COALESCE((SELECT SUM(sr.TotalScaled) FROM SalesReturns sr WHERE sr.SalesInvoiceId=si.Id),0) ReturnedScaled,CASE WHEN EXISTS(SELECT 1 FROM SalesCancellations sc WHERE sc.SalesInvoiceId=si.Id) THEN 0 ELSE MAX(0,si.TotalScaled-COALESCE((SELECT SUM(sr.TotalScaled) FROM SalesReturns sr WHERE sr.SalesInvoiceId=si.Id),0)-si.PaidScaled) END OutstandingScaled,si.InventoryDocumentId,si.OperationKey,si.RequestHash,si.Version,si.Revision

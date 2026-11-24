@@ -32,6 +32,14 @@ namespace AlKhayal.Api.Controllers
         public Task<IHttpActionResult> Save(WorkforceCommand command, CancellationToken ct) => Execute("employee-save", "employee-management", true, command, ct);
         [HttpPost, Route("employees/archive")]
         public Task<IHttpActionResult> Archive(WorkforceCommand command, CancellationToken ct) => Execute("employee-archive", "employee-management", true, command, ct);
+        [HttpGet, Route("advances/history")]
+        public Task<IHttpActionResult> AdvanceHistory(CancellationToken ct, long? employeeId = null, int page = 1)
+            => Run("employee-management", true, false, async u => Ok(ApiEnvelope<WorkforcePage<EmployeeAdvance>>.Ok(
+                await _service.AdvanceHistoryAsync(employeeId, page, ct).ConfigureAwait(false))), ct);
+        [HttpGet, Route("payroll/history")]
+        public Task<IHttpActionResult> PayrollHistory(long employeeId, string period, CancellationToken ct, int page = 1)
+            => Run("employee-management", true, false, async u => Ok(ApiEnvelope<PayrollHistory>.Ok(
+                await _service.PayrollHistoryAsync(employeeId, period, page, ct).ConfigureAwait(false))), ct);
         [HttpGet, Route("advances")]
         public Task<IHttpActionResult> Advances(CancellationToken ct, long? employeeId = null) => Run("employee-management", true, false, async u => Ok(ApiEnvelope<IReadOnlyList<EmployeeAdvance>>.Ok(await _service.AdvancesAsync(employeeId, ct).ConfigureAwait(false))), ct);
         [HttpPost, Route("advances")]

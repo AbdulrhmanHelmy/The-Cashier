@@ -4,6 +4,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using AlKhayal.Application.Licensing;
 using AlKhayal.Data.Licensing;
@@ -42,17 +43,35 @@ namespace AlKhayal.UnitTests
                             var display = all.OfType<TextBox>().Single(t => t.ReadOnly);
                             Assert.False(display.TabStop);
                             var input = all.OfType<TextBox>().Single(t => !t.ReadOnly);
+                            Assert.False(Alert(dialog).Visible);
+                            Assert.Contains(all.OfType<Label>(), label => label.Text == "انسخ كود الجهاز، ثم الصق كود التفعيل اللي هيوصلك.");
+                            Assert.DoesNotContain(all.OfType<Label>(), label => label.Text.Contains("إنترنت") || label.Text.Contains("الإنترنت"));
+                            var copy = all.OfType<Button>().Single(b => b.Text == "نسخ كود الجهاز");
+                            var activate = all.OfType<Button>().Single(b => b.Text == "تفعيل البرنامج");
+                            var contact = all.OfType<LinkLabel>().Single();
+                            Assert.Equal(RightToLeft.No, display.RightToLeft);
+                            Assert.Equal(RightToLeft.No, input.RightToLeft);
+                            var lastRequestCharacter = display.GetPositionFromCharIndex(display.TextLength - 1);
+                            Assert.InRange(lastRequestCharacter.Y + display.Font.Height, 1, display.ClientSize.Height);
+                            Assert.True(input.AcceptsReturn);
+                            Assert.True(copy.Focus());
+                            foreach (var pair in new (Control From, Control To)[] { (copy, input), (input, activate), (activate, contact) })
+                            {
+                                Assert.True(dialog.SelectNextControl(pair.From, true, true, true, false));
+                                Assert.True(pair.To.Focused);
+                            }
                             var clipboard = Clipboard.GetDataObject();
                             try
                             {
-                                all.OfType<Button>().Single(b => b.Text == "نسخ كود الجهاز").PerformClick();
+                                copy.PerformClick();
+                                Assert.Equal("تم نسخ كود الجهاز كاملًا.", Alert(dialog).Text);
                                 Assert.Equal(service.CreateRequest(),Clipboard.GetText());
                                 Assert.Equal(service.CreateRequest(),display.Text);
                                 input.Paste(); Assert.Equal(display.Text,input.Text);
                             }
                             finally { if(clipboard != null) Clipboard.SetDataObject(clipboard,true); else Clipboard.Clear(); }
-                            var activate = all.OfType<Button>().Single(b => b.Text == "تفعيل البرنامج");
                             input.Text = "invalid"; activate.PerformClick(); Assert.True(dialog.Visible); Assert.False(service.Check().IsValid);
+                            Assert.Equal(service.Validate("invalid").Message, Alert(dialog).Text);
                             var payload = LicenseFormat.CreatePayload(hardware.ReadClaims(),"ui-test",Guid.NewGuid(),DateTime.UtcNow);
                             input.Text = payload + "|" + Convert.ToBase64String(rsa.SignData(LicenseFormat.Bytes(payload),"SHA256"));
                             activate.PerformClick(); Assert.Equal(DialogResult.OK,dialog.DialogResult); Assert.True(service.Check().IsValid);
@@ -70,6 +89,59 @@ namespace AlKhayal.UnitTests
             thread.SetApartmentState(ApartmentState.STA); thread.Start();
             Assert.True(thread.Join(TimeSpan.FromSeconds(30)),"Activation dialog did not exit cleanly.");
             if(failure != null) throw new Exception("Native dialog test failed",failure);
+        }
+        [Fact]
+        public void Native_activation_shows_pending_state_and_blocks_repeat_install_until_complete()
+        {
+            Exception failure = null;
+            var thread = new Thread(() =>
+            {
+                try
+                {
+                    using (var rsa = RsaLicenseSignatures.CreateRsa())
+                    {
+                        var hardware = new Hardware();
+                        var storage = new MemoryStorage();
+                        var service = new LicenseService(storage,
+                            new RsaLicenseSignatures(new Dictionary<string, string> { { "ui-test", rsa.ToXmlString(false) } }), hardware);
+                        var installer = new PendingInstaller();
+                        using (var dialog = new ActivationForm(service, installer, darkTheme: true))
+                        {
+                            dialog.Show();
+                            var input = Descendants(dialog).OfType<TextBox>().Single(box => !box.ReadOnly);
+                            var activate = Descendants(dialog).OfType<Button>().Single(button => button.Text == "تفعيل البرنامج");
+                            var payload = LicenseFormat.CreatePayload(hardware.ReadClaims(), "ui-test", Guid.NewGuid(), DateTime.UtcNow);
+                            input.Text = payload + "|" + Convert.ToBase64String(rsa.SignData(LicenseFormat.Bytes(payload), "SHA256"));
+                            string closingMessage = null;
+                            Color closingColor = Color.Empty;
+                            dialog.FormClosing += (s, e) =>
+                            {
+                                closingMessage = Alert(dialog).Text;
+                                closingColor = Alert(dialog).ForeColor;
+                            };
+
+                            activate.PerformClick();
+                            Assert.False(activate.Enabled);
+                            Assert.Contains("جارٍ", activate.Text);
+                            Assert.Contains("جارٍ التحقق", Alert(dialog).Text);
+                            activate.PerformClick();
+                            Assert.Equal(1, installer.Calls);
+                            Assert.True(service.Activate(input.Text).IsValid);
+                            installer.Completion.SetResult(LicenseInstallResult.Success);
+                            System.Windows.Forms.Application.DoEvents();
+                            Assert.Equal(DialogResult.OK, dialog.DialogResult);
+                            Assert.Equal("تم التفعيل بنجاح.", closingMessage);
+                            Assert.Equal(ActivationSupport.Success(true), closingColor);
+                        }
+                    }
+                }
+                catch (Exception error) { failure = error; }
+            });
+            thread.IsBackground = true;
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.Start();
+            Assert.True(thread.Join(TimeSpan.FromSeconds(20)));
+            if (failure != null) throw new Exception("Activation pending state failed", failure);
         }
         [Theory]
         [InlineData(LicenseInstallResult.Cancelled)]
@@ -120,10 +192,20 @@ namespace AlKhayal.UnitTests
                             var bounds=dialog.RectangleToClient(control.RectangleToScreen(control.ClientRectangle));
                             Assert.True(bounds.Left>=0 && bounds.Top>=0 && bounds.Right<=dialog.ClientSize.Width && bounds.Bottom<=dialog.ClientSize.Height);
                         }
+                        Assert.False(Descendants(dialog).OfType<FlowLayoutPanel>().Single().VerticalScroll.Visible);
                         var preview=Environment.GetEnvironmentVariable("ALKHAYAL_ACTIVATION_PREVIEW_PATH");
                         if(!string.IsNullOrEmpty(preview))
                             using(var bitmap=new Bitmap(dialog.Width,dialog.Height))
                             { dialog.DrawToBitmap(bitmap,new Rectangle(Point.Empty,dialog.Size));bitmap.Save(Path.Combine(Path.GetDirectoryName(preview),"activation-dpi-"+(int)(scale*100)+".png")); }
+                        dialog.Width = dialog.MinimumSize.Width;
+                        System.Windows.Forms.Application.DoEvents();
+                        var viewport = Descendants(dialog).OfType<FlowLayoutPanel>().Single();
+                        Assert.False(viewport.HorizontalScroll.Visible);
+                        Assert.True(viewport.VerticalScroll.Visible);
+                        var contact = Descendants(dialog).OfType<LinkLabel>().Single();
+                        Assert.True(contact.Focus());
+                        var contactBounds = viewport.RectangleToClient(contact.RectangleToScreen(contact.ClientRectangle));
+                        Assert.True(viewport.ClientRectangle.Contains(contactBounds));
                     }
                 }
                 catch(Exception error){failure=error;}
@@ -133,6 +215,20 @@ namespace AlKhayal.UnitTests
         }
         private static IEnumerable<Control> Descendants(Control parent)
         { foreach(Control child in parent.Controls) { yield return child; foreach(var nested in Descendants(child)) yield return nested; } }
+        private static Label Alert(Form dialog) =>
+            Descendants(dialog).OfType<Label>().Single(label => label.AccessibleRole == AccessibleRole.Alert);
+
+        private sealed class PendingInstaller : ILicenseInstaller
+        {
+            public int Calls { get; private set; }
+            public TaskCompletionSource<LicenseInstallResult> Completion { get; } = new TaskCompletionSource<LicenseInstallResult>();
+
+            public Task<LicenseInstallResult> InstallAsync(string text)
+            {
+                Calls++;
+                return Completion.Task;
+            }
+        }
         private sealed class MemoryStorage : ILicenseStorage { public string Text; public string Read() => Text; public void Write(string text) { Text = text; } }
         private sealed class RetryTestInstaller:ILicenseInstaller
         {

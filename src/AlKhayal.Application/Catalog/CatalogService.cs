@@ -26,7 +26,7 @@ namespace AlKhayal.Application.Catalog
             if (query.Page < 1) query.Page = 1;
             if (query.PageSize < 1 || query.PageSize > 100) query.PageSize = 25;
             if(query.PosWarehouseId.HasValue && query.PosWarehouseId.Value<=0) return CatalogResult<CatalogPage>.Fail("validation","المخزن غير صالح.");
-            var page = await _store.ListProductsAsync(new ProductStoreQuery { Search=TrimToNull(query.Search), CategoryId=query.CategoryId, IsActive=query.IsActive, IncludeArchived=query.IncludeArchived, Offset=(query.Page-1)*query.PageSize, Limit=query.PageSize, PosWarehouseId=query.PosWarehouseId, ExcludeBundles=query.ExcludeBundles }, ct).ConfigureAwait(false);
+            var page = await _store.ListProductsAsync(new ProductStoreQuery { Search=TrimToNull(query.Search), DirectorySearch=query.DirectorySearch, CategoryId=query.CategoryId, IsActive=query.IsActive, IncludeArchived=query.IncludeArchived, Offset=(query.Page-1)*query.PageSize, Limit=query.PageSize, PosWarehouseId=query.PosWarehouseId, ExcludeBundles=query.ExcludeBundles }, ct).ConfigureAwait(false);
             return CatalogResult<CatalogPage>.Ok(new CatalogPage { Items=page.Items.Select(ToProduct).ToList(), Page=query.Page, PageSize=query.PageSize, TotalCount=page.TotalCount });
         }
 

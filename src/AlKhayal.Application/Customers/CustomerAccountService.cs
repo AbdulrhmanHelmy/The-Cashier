@@ -23,14 +23,28 @@ namespace AlKhayal.Application.Customers
             if(!(method=="cash"||method=="card"||method=="transfer"||method=="wallet"))throw new ArgumentException("طريقة التحصيل غير صالحة.");
             return _accounts.AddPayment(customerId, payment.Amount, payment.PaymentDate, method, payment.Account.Trim(), payment.Notes,payment.OperationKey.Trim(),payment.TreasuryAccountId,actor);
         }
-        public CustomerStatement GetStatement(long customerId, string from, string to)
+        private static void ValidateStatementDates(string from, string to)
         {
             DateTime parsed;
             if (!string.IsNullOrWhiteSpace(from) && !DateTime.TryParseExact(from, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out parsed)) throw new ArgumentException("تاريخ البداية غير صحيح.");
             if (!string.IsNullOrWhiteSpace(to) && !DateTime.TryParseExact(to, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out parsed)) throw new ArgumentException("تاريخ النهاية غير صحيح.");
             if (!string.IsNullOrWhiteSpace(from) && !string.IsNullOrWhiteSpace(to) && string.CompareOrdinal(from, to) > 0) throw new ArgumentException("تاريخ البداية يجب ألا يكون بعد تاريخ النهاية.");
+
+        }
+        public CustomerStatement GetStatement(long customerId, string from, string to)
+        {
+            ValidateStatementDates(from, to);
             return _accounts.GetStatement(customerId, from, to);
         }
+
+        public System.Threading.Tasks.Task<CustomerStatement> GetStatementPageAsync(long customerId, string from, string to, long page, int pageSize, System.Threading.CancellationToken ct)
+        {
+            ValidateStatementDates(from, to);
+            if (page < 1 || (pageSize != 25 && pageSize != 50 && pageSize != 100 && pageSize != 200))
+                throw new ArgumentException("رقم الصفحة أو حجمها غير صالح.");
+            return System.Threading.Tasks.Task.Run(() => _accounts.GetStatementPage(customerId, from, to, page, pageSize, ct), ct);
+        }
+
         public List<CustomerPayment> GetPayments(long customerId) { return _accounts.GetPayments(customerId); }
         public CustomerStatementTransaction PostTransaction(long customerId,string type,decimal amount,string occurredOn,string notes,string operationKey,string method=null,long? treasuryAccountId=null,long actor=0)
         {

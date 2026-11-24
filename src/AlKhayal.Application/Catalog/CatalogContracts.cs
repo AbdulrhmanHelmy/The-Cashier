@@ -94,6 +94,7 @@ namespace AlKhayal.Application.Catalog
     public sealed class ProductQuery
     {
         public string Search { get; set; }
+        public bool DirectorySearch { get; set; }
         public long? CategoryId { get; set; }
         public bool? IsActive { get; set; }
         public bool IncludeArchived { get; set; }

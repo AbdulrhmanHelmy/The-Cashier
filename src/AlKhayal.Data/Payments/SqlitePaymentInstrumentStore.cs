@@ -15,8 +15,20 @@ namespace AlKhayal.Data.Payments
         private readonly string _cs;
         public SqlitePaymentInstrumentStore(string connectionString) { _cs = connectionString; }
         private async Task<SQLiteConnection> OpenAsync(CancellationToken ct) { var c = new SQLiteConnection(_cs); try { await c.OpenAsync(ct).ConfigureAwait(false); await c.ExecuteAsync(new CommandDefinition("PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;",cancellationToken:ct)).ConfigureAwait(false); return c; } catch { c.Dispose(); throw; } }
-        public async Task<IReadOnlyList<PaymentInstrument>> ListAsync(string type, bool activeOnly, CancellationToken ct)
-        { using (var c = await OpenAsync(ct).ConfigureAwait(false)) return (await c.QueryAsync<PaymentInstrument>(new CommandDefinition("SELECT * FROM PaymentInstruments WHERE (@type IS NULL OR Type=@type) AND (@activeOnly=0 OR IsActive=1) ORDER BY Name,Id",new{type,activeOnly},cancellationToken:ct)).ConfigureAwait(false)).ToList(); }
+        public async Task<IReadOnlyList<PaymentInstrument>> ListAsync(string type, bool activeOnly, CancellationToken ct, string search = null, long? id = null)
+        {
+            var like = "%" + (search ?? "").Replace("!", "!!").Replace("%", "!%").Replace("_", "!_") + "%";
+            using (var c = await OpenAsync(ct).ConfigureAwait(false))
+            {
+                var rows = await c.QueryAsync<PaymentInstrument>(new CommandDefinition(@"
+                    SELECT * FROM PaymentInstruments WHERE (@type IS NULL OR Type=@type) AND (@activeOnly=0 OR IsActive=1)
+                    AND (@id IS NULL OR Id=@id)
+                    AND (@search IS NULL OR Name LIKE @like ESCAPE '!' OR Number LIKE @like ESCAPE '!' OR Provider LIKE @like ESCAPE '!')
+                    ORDER BY CASE WHEN Number=@search COLLATE NOCASE THEN 0 ELSE 1 END,Name,Id LIMIT @limit",
+                    new { type, activeOnly, search, id, like, limit = search == null && !id.HasValue ? -1 : 20 }, cancellationToken: ct)).ConfigureAwait(false);
+                return rows.ToList();
+            }
+        }
         public async Task<PaymentInstrument> SaveAsync(PaymentInstrument value, string identity, long actor, CancellationToken ct)
         {
             try {
@@ -48,8 +60,8 @@ namespace AlKhayal.Data.Payments
         public async Task<PaymentHistoryPage> HistoryAsync(PaymentHistoryQuery q, CancellationToken ct)
         {
             var source=History+(q.InstrumentId.HasValue?" AND s.InstrumentId=@InstrumentId AND p.EventType='cash_sale'":"");
-            var filter=" FROM ("+source+") h WHERE (@InstrumentId IS NULL OR InstrumentId=@InstrumentId) AND (@CashierId IS NULL OR CashierUserId=@CashierId) AND (@CashierName IS NULL OR CashierName LIKE @CashierSearch) AND (@From IS NULL OR InvoiceDate>=@From) AND (@To IS NULL OR InvoiceDate<=@To) AND (@InvoiceNumber IS NULL OR InvoiceNumber LIKE @Search) AND (@Status IS NULL OR Status=@Status)";
-            var args=new{q.InstrumentId,q.CashierId,q.CashierName,CashierSearch="%"+(q.CashierName??"")+"%",q.From,q.To,q.InvoiceNumber,Search="%"+(q.InvoiceNumber??"")+"%",q.Status,Limit=q.PageSize,Offset=(q.Page-1)*q.PageSize};
+            var filter=" FROM ("+source+") h WHERE (@InvoiceId IS NULL OR InvoiceId=@InvoiceId) AND (@InstrumentId IS NULL OR InstrumentId=@InstrumentId) AND (@CashierId IS NULL OR CashierUserId=@CashierId) AND (@CashierName IS NULL OR CashierName LIKE @CashierSearch) AND (@From IS NULL OR InvoiceDate>=@From) AND (@To IS NULL OR InvoiceDate<=@To) AND (@InvoiceNumber IS NULL OR InvoiceNumber LIKE @Search) AND (@Status IS NULL OR Status=@Status)";
+            var args=new{q.InvoiceId,q.InstrumentId,q.CashierId,q.CashierName,CashierSearch="%"+(q.CashierName??"")+"%",q.From,q.To,q.InvoiceNumber,Search="%"+(q.InvoiceNumber??"")+"%",q.Status,Limit=q.PageSize,Offset=(q.Page-1)*q.PageSize};
             using(var c=await OpenAsync(ct).ConfigureAwait(false)) using(var tx=c.BeginTransaction()) {
                 var result=await c.QuerySingleAsync<PaymentHistoryPage>(new CommandDefinition("SELECT COUNT(*) Count,COUNT(DISTINCT InvoiceId) InvoiceCount,COALESCE(SUM(AmountScaled),0) TotalScaled"+filter,args,tx,cancellationToken:ct)).ConfigureAwait(false);
                 result.Items=(await c.QueryAsync<PaymentHistoryRow>(new CommandDefinition("SELECT *"+filter+" ORDER BY InvoiceDate DESC,PaymentId DESC LIMIT @Limit OFFSET @Offset",args,tx,cancellationToken:ct)).ConfigureAwait(false)).ToList();tx.Commit();return result;

@@ -30,6 +30,13 @@ namespace AlKhayal.Application.Expenses
         public string Notes { get; set; }
         public string OperationKey { get; set; }
     }
+    public sealed class ExpenseVoucherPage
+    {
+        public IReadOnlyList<ExpenseVoucher> Items { get; set; }
+        public long TotalCount { get; set; }
+        public long Page { get; set; }
+    }
+
     public sealed class ExpenseVoucher
     {
         public long Id { get; set; }
@@ -52,7 +59,10 @@ namespace AlKhayal.Application.Expenses
     {
         Task<IReadOnlyList<ExpenseCategory>> CategoriesAsync(CancellationToken ct);
         Task<ExpenseCategory> AddCategoryAsync(string name, string normalizedName, long userId, CancellationToken ct);
+        Task<ExpenseVoucherPage> VoucherPageAsync(long page, CancellationToken ct);
         Task<IReadOnlyList<ExpenseVoucher>> VouchersAsync(CancellationToken ct);
+        Task<IReadOnlyList<ExpenseVoucher>> SearchVouchersAsync(string query, CancellationToken ct);
+        Task<ExpenseVoucher> GetVoucherAsync(long id, CancellationToken ct);
         Task<ExpenseVoucher> PostAsync(ExpenseCommand command, long amount, string hash, long userId, CancellationToken ct);
     }
     public sealed class ExpenseService
@@ -60,7 +70,20 @@ namespace AlKhayal.Application.Expenses
         private readonly IExpenseStore _store;
         public ExpenseService(IExpenseStore store) { _store = store; }
         public Task<IReadOnlyList<ExpenseCategory>> CategoriesAsync(CancellationToken ct) => _store.CategoriesAsync(ct);
+        public Task<ExpenseVoucherPage> VoucherPageAsync(long page, CancellationToken ct)
+        {
+            if (page < 1) throw new ArgumentException("رقم الصفحة غير صالح.");
+            return _store.VoucherPageAsync(page, ct);
+        }
+
         public Task<IReadOnlyList<ExpenseVoucher>> VouchersAsync(CancellationToken ct) => _store.VouchersAsync(ct);
+        public Task<IReadOnlyList<ExpenseVoucher>> SearchVouchersAsync(string query, CancellationToken ct)
+        {
+            query = (query ?? "").Trim();
+            if (query.Length == 0 || query.Length > 120) throw new ArgumentException("أدخل عبارة بحث صالحة.");
+            return _store.SearchVouchersAsync(query, ct);
+        }
+        public Task<ExpenseVoucher> GetVoucherAsync(long id, CancellationToken ct) => _store.GetVoucherAsync(id, ct);
         public Task<ExpenseCategory> AddCategoryAsync(ExpenseCategoryCommand command, long userId, CancellationToken ct)
         {
             var name = Text(command?.Name, 160, true);

@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using AlKhayal.Application.Finance;
 using AlKhayal.Core.Interfaces;
 using AlKhayal.Core.Models;
@@ -52,10 +54,18 @@ namespace AlKhayal.Application.Maintenance
             return _repository.Create(ticket,key,Hash(canonical));
         }
 
-        public List<MaintenanceTicket> List(long? customerId)
+        public List<MaintenanceTicket> List(long? customerId, long? ticketId = null)
         {
             if (customerId.HasValue && customerId.Value <= 0) throw new ArgumentException("معرف العميل غير صالح.");
-            return _repository.List(customerId);
+            if (ticketId <= 0) throw new ArgumentException("رقم تذكرة الصيانة غير صالح.");
+            return _repository.List(customerId, ticketId);
+        }
+
+        public Task<IReadOnlyList<MaintenanceTicket>> SearchAsync(string query, CancellationToken ct)
+        {
+            query = (query ?? "").Trim();
+            if (query.Length == 0 || query.Length > 120) throw new ArgumentException("أدخل عبارة بحث صالحة.");
+            return _repository.SearchAsync(query, ct);
         }
 
         public MaintenanceTicket UpdateStatus(long ticketId, string status, string operationKey)

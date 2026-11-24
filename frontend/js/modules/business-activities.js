@@ -8,12 +8,12 @@
 
     function profileFields(profile, key) {
       return '<div class="card-body form-grid" data-scale-profile="' + key + '">' +
-        '<div class="field"><label>اسم الميزان</label><input class="input" data-field="name" value="' + U.escape(profile.name) + '"></div>' +
-        '<div class="field"><label>البادئة</label><input class="input ltr" data-field="prefix" value="' + U.escape(profile.prefix) + '" maxlength="6"></div>' +
-        '<div class="field"><label>خانات PLU</label><input class="input" data-field="productLength" type="number" min="1" max="8" value="' + profile.productLength + '"></div>' +
-        '<div class="field"><label>نوع القيمة</label><select class="select" data-field="valueType"><option value="weight"' + (profile.valueType === "weight" ? " selected" : "") + '>وزن</option><option value="price"' + (profile.valueType === "price" ? " selected" : "") + '>سعر إجمالي</option></select></div>' +
-        '<div class="field"><label>خانات القيمة</label><input class="input" data-field="valueLength" type="number" min="1" max="8" value="' + profile.valueLength + '"></div>' +
-        '<div class="field"><label>الخانات العشرية</label><input class="input" data-field="valueDecimals" type="number" min="0" max="8" value="' + profile.valueDecimals + '"></div>' +
+        '<label class="field"><span>اسم الميزان</span><input class="input" data-field="name" value="' + U.escape(profile.name) + '"></label>' +
+        '<label class="field"><span>البادئة</span><input class="input ltr" data-field="prefix" value="' + U.escape(profile.prefix) + '" maxlength="6"></label>' +
+        '<label class="field"><span>خانات PLU</span><input class="input" data-field="productLength" type="number" min="1" max="8" value="' + profile.productLength + '"></label>' +
+        '<label class="field"><span>نوع القيمة</span><select class="select" data-field="valueType"><option value="weight"' + (profile.valueType === "weight" ? " selected" : "") + '>وزن</option><option value="price"' + (profile.valueType === "price" ? " selected" : "") + '>سعر إجمالي</option></select></label>' +
+        '<label class="field"><span>خانات القيمة</span><input class="input" data-field="valueLength" type="number" min="1" max="8" value="' + profile.valueLength + '"></label>' +
+        '<label class="field"><span>الخانات العشرية</span><input class="input" data-field="valueDecimals" type="number" min="0" max="8" value="' + profile.valueDecimals + '"></label>' +
         '<label class="switch"><input data-field="valueHasCheckDigit" type="checkbox"' + (profile.valueHasCheckDigit ? " checked" : "") + '><span>رقم تحقق داخلي للقيمة</span></label>' +
         '<label class="switch"><input data-field="isActive" type="checkbox"' + (profile.isActive ? " checked" : "") + '><span>مفعل</span></label>' +
         '<div><button class="button ' + (key === "new" ? "" : "primary") + '" data-save-scale="' + key + '">' + (key === "new" ? "إضافة الميزان" : "حفظ الملف") + '</button></div></div>';

@@ -34,10 +34,10 @@ module.exports = function () {
   assert.strictEqual(permitted().length, registry.quickAccess.length, "all authorized shortcuts are available to administrators");
   assert.ok(html.indexOf('js/components/quickbar-layout.js') >= 0 && html.indexOf('js/components/quickbar-layout.js') < html.indexOf('js/app.js'), "layout helper loads before the shell");
   assert.ok(app.indexOf('localStorage.removeItem("alkhayal_quickbar_collapsed")') >= 0 && app.indexOf("data-quickbar-toggle") < 0, "old hidden preference is cleared and no hide control is rendered");
-  assert.ok(app.indexOf('registry.quickAccess.filter(function (item) { return routeEnabled(screensByRoute[item.route]); })') >= 0, "both direct and overflow actions use effective route access");
+  assert.ok(app.indexOf('item.route !== "alerts-list" && routeEnabled(screensByRoute[item.route])') >= 0, "both direct and overflow actions use effective route access");
   assert.ok(app.indexOf('new ResizeObserver(layoutQuickbar)') >= 0 && app.indexOf('row.clientWidth') >= 0, "overflow responds to the actual toolbar width");
-  assert.ok(app.indexOf('menu.innerHTML = registry.quickAccess.filter') >= 0 && app.indexOf('.slice(count)') >= 0, "overflow contains only the remaining permitted shortcuts");
-  assert.ok(app.indexOf('if (tile) { closeQuickbarMenu(false); navigateFromShortcut(tile.getAttribute("data-quick-route")); }') >= 0 && app.indexOf("function navigateFromShortcut(route, routeState)") >= 0, "quick access refreshes an open page through the shared freshness-aware navigation path");
+  assert.ok(app.indexOf('menu.innerHTML = quickActions()') >= 0 && app.indexOf('.slice(count)') >= 0, "overflow contains only the remaining permitted shortcuts");
+  assert.ok(app.indexOf('runQuickAction(tile.dataset.quickRoute)') >= 0 && app.indexOf("function navigateFromShortcut(route, routeState)") >= 0, "quick access uses the shared action dispatch path");
   assert.ok(app.indexOf('updateQuickbarActive();') >= 0 && app.indexOf('aria-current') >= 0, "active routes are marked in direct and overflow placements");
   assert.ok(app.indexOf('event.key === "Escape"') >= 0 && app.indexOf('event.target.closest("#quickbarMore")') >= 0, "Escape and outside click close More");
   assert.ok(css.indexOf('.quick-tile[hidden]') >= 0 && css.indexOf('.quickbar-menu[hidden]') >= 0 && !/\.quickbar-tiles[^}]*overflow-x:\s*auto/.test(css), "hidden duplicates are inaccessible and the toolbar does not scroll horizontally");

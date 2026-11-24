@@ -79,7 +79,7 @@ namespace AlKhayal.Printing
                 if (checkedLabels.Contains(placement.Label)) continue;
                 if (e.Key == "barcode") NativeBarcode.Validate(NativeBarcode.Modules(placement.Label.Barcode, placement.Label.Format), e, g.DpiX);
                 else if (e.Key == "logo") { if (!string.IsNullOrEmpty(t.LogoPngBase64)) using (var image = NativePrintRenderer.DecodeLogo(t.LogoPngBase64)) { } }
-                else { var value = FittingText(g, Text(placement.Label, e), e); using (var font = Fit(g, value, e)) { } }
+                else { var value = FittingText(g, Text(placement.Label, e), e, t.UseConfiguredTextAlignment); using (var font = Fit(g, value, e, t.UseConfiguredTextAlignment)) { } }
             }
                 checkedLabels.Add(placement.Label);
             }
@@ -92,7 +92,7 @@ namespace AlKhayal.Printing
                 var rect = ElementRect(t, e, x, y);
                 if (e.Key == "barcode") { NativeBarcode.Draw(g, NativeBarcode.Modules(label.Barcode, label.Format), e, rect.X, rect.Y); continue; }
                 if (e.Key == "logo") { if (!string.IsNullOrEmpty(t.LogoPngBase64)) using (var image = NativePrintRenderer.DecodeLogo(t.LogoPngBase64)) g.DrawImage(image, rect); continue; }
-                var text = FittingText(g, Text(label, e), e); using (var font = Fit(g, text, e)) using (var format = Format(e))
+                var text = FittingText(g, Text(label, e), e, t.UseConfiguredTextAlignment); using (var font = Fit(g, text, e, t.UseConfiguredTextAlignment)) using (var format = Format(e, t.UseConfiguredTextAlignment))
                 { g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit; g.DrawString(text, font, Brushes.Black, rect, format); }
             }
         }
@@ -107,30 +107,30 @@ namespace AlKhayal.Printing
                 x + (float)element.X;
             return new RectangleF(left, y + (float)element.Y, (float)element.Width, (float)element.Height);
         }
-        private static string FittingText(Graphics g, string text, LabelElement e)
+        private static string FittingText(Graphics g, string text, LabelElement e, bool useConfiguredAlignment)
         {
-            if (e.Key != "productName") return text;
-            try { using (var font = Fit(g, text, e)) { return text; } }
+            if (e.Key != "productName" && (!useConfiguredAlignment || (e.Key != "company" && e.Key != "category" && e.Key != "unit"))) return text;
+            try { using (var font = Fit(g, text, e, useConfiguredAlignment)) { return text; } }
             catch (PrintException ex) when (ex.Code == "label_text_overflow")
             {
                 for (var length = text.Length - 1; length > 0; length--)
                 {
                     var shortened = text.Substring(0, length).TrimEnd() + "…";
-                    try { using (var font = Fit(g, shortened, e)) { return shortened; } }
+                    try { using (var font = Fit(g, shortened, e, useConfiguredAlignment)) { return shortened; } }
                     catch (PrintException fit) when (fit.Code == "label_text_overflow") { }
                 }
                 throw;
             }
         }
-        private static StringFormat Format(LabelElement e)
+        private static StringFormat Format(LabelElement e, bool useConfiguredAlignment)
         {
             var rtl = e.Key != "barcodeText" && e.Key != "sku" && e.Key != "productCode";
             var f = new StringFormat(StringFormat.GenericDefault) { FormatFlags = rtl ? StringFormatFlags.DirectionRightToLeft : 0, Trimming = StringTrimming.None };
-            f.Alignment = e.Key == "productName" || e.Alignment == "center" ? StringAlignment.Center : e.Alignment == "right" ? (rtl ? StringAlignment.Near : StringAlignment.Far) : (rtl ? StringAlignment.Far : StringAlignment.Near); return f;
+            f.Alignment = (!useConfiguredAlignment && e.Key == "productName") || e.Alignment == "center" ? StringAlignment.Center : e.Alignment == "right" ? (rtl ? StringAlignment.Near : StringAlignment.Far) : (rtl ? StringAlignment.Far : StringAlignment.Near); return f;
         }
-        private static Font Fit(Graphics g, string text, LabelElement e)
+        private static Font Fit(Graphics g, string text, LabelElement e, bool useConfiguredAlignment)
         {
-            using (var format = Format(e))
+            using (var format = Format(e, useConfiguredAlignment))
             for (var size = (float)e.FontSize; size >= 5; size -= .25f)
             {
                 var font = new Font("Tahoma", size, e.Bold ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Point);

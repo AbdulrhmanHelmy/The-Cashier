@@ -183,6 +183,14 @@ namespace AlKhayal.Application.Workforce
         public int Page { get; set; }
         public int PageSize { get; set; }
     }
+    public sealed class PayrollHistory
+    {
+        public WorkforcePage<EmployeePayroll> History { get; set; }
+        public long PendingAdvanceScaled { get; set; }
+        public string PendingAdvance => MoneyPolicy.FormatForUser(PendingAdvanceScaled);
+        public bool AlreadyPaid { get; set; }
+    }
+
     public interface IWorkforceStore
     {
         Task<long> ExecuteAsync(string action, WorkforceCommand command, long? amount, string hash, long actorId, bool administrator, CancellationToken ct);
@@ -194,6 +202,8 @@ namespace AlKhayal.Application.Workforce
         Task<WorkforcePage<ShiftActivity>> ActivityAsync(long id, int page, long? ownerId, CancellationToken ct);
         Task<IReadOnlyList<ShiftEvent>> EventsAsync(long id, int page, long? ownerId, CancellationToken ct);
         Task<IReadOnlyList<AttendanceAuditRecord>> AttendanceAuditAsync(long id, int page, CancellationToken ct);
+        Task<WorkforcePage<EmployeeAdvance>> AdvanceHistoryAsync(long? employeeId, int page, CancellationToken ct);
+        Task<PayrollHistory> PayrollHistoryAsync(long employeeId, string period, int page, CancellationToken ct);
         Task<IReadOnlyList<EmployeeAdvance>> AdvancesAsync(long? employeeId, CancellationToken ct);
         Task<IReadOnlyList<EmployeePayroll>> PayrollAsync(long? employeeId, CancellationToken ct);
     }

@@ -13,6 +13,9 @@ namespace AlKhayal.Core.Models
         public decimal ClosingBalance { get; set; }
         public decimal CurrentBalance { get; set; }
         public decimal CreditLimit { get; set; }
+        public long? Page { get; set; }
+        public int? PageSize { get; set; }
+        public long? TotalCount { get; set; }
         public List<CustomerStatementMovement> Movements { get; set; } = new List<CustomerStatementMovement>();
     }
     public sealed class CustomerStatementMovement

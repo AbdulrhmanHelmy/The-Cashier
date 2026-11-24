@@ -18,7 +18,7 @@ namespace AlKhayal.UI
         private AlKhayalServer _server;
         private readonly LicenseService _licensing;
         private readonly TrialSecurityService _trial;
-        private readonly LinkLabel _trialCountdown = new LinkLabel { Dock = DockStyle.Top, Height = 28, TextAlign = ContentAlignment.MiddleCenter, BackColor = Color.FromArgb(18, 35, 58), LinkColor = Color.FromArgb(218, 185, 111), ActiveLinkColor = Color.White, Visible = false, AccessibleName = "الفترة التجريبية، تفعيل الآن" };
+        private readonly LinkLabel _trialCountdown = new LinkLabel { Dock = DockStyle.Top, Height = 28, TextAlign = ContentAlignment.MiddleCenter, BackColor = ActivationSupport.Primary(false), LinkColor = ActivationSupport.Gold(true), ActiveLinkColor = Color.White, Visible = false, AccessibleName = "الفترة التجريبية، تفعيل الآن" };
         private readonly Timer _trialTimer = new Timer { Interval = 60000 };
         private readonly SplashForm _splash;
         private readonly DesktopCredentialStore _credentials = new DesktopCredentialStore();
@@ -59,7 +59,8 @@ namespace AlKhayal.UI
             MinimumSize = new Size(900, 600);
             AutoScaleMode = AutoScaleMode.Dpi;
             RightToLeft = RightToLeft.Yes;
-            BackColor = Color.White;
+            BackColor = ActivationSupport.Background(ActivationSupport.DarkTheme());
+            _browser.DefaultBackgroundColor = BackColor;
             WindowState = FormWindowState.Maximized;
 
             _status.Dock = DockStyle.Fill;

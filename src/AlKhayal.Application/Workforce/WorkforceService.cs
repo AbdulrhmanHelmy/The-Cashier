@@ -16,6 +16,10 @@ namespace AlKhayal.Application.Workforce
         public Task<Employee> EmployeeAsync(long id, CancellationToken ct) => _store.EmployeeAsync(id, ct);
         public Task<System.Collections.Generic.IReadOnlyList<AttendanceAuditRecord>> AttendanceAuditAsync(long id, int page, CancellationToken ct) => _store.AttendanceAuditAsync(id, Math.Max(1, Math.Min(1000000, page)), ct);
         public Task<WorkforcePage<AttendanceRecord>> AttendanceAsync(WorkforceQuery q, CancellationToken ct) => _store.AttendanceAsync(Query(q), ct);
+        public Task<WorkforcePage<EmployeeAdvance>> AdvanceHistoryAsync(long? employeeId, int page, CancellationToken ct)
+            => _store.AdvanceHistoryAsync(employeeId, Math.Max(1, page), ct);
+        public Task<PayrollHistory> PayrollHistoryAsync(long employeeId, string period, int page, CancellationToken ct)
+            => _store.PayrollHistoryAsync(employeeId, period, Math.Max(1, page), ct);
         public Task<System.Collections.Generic.IReadOnlyList<EmployeeAdvance>> AdvancesAsync(long? employeeId, CancellationToken ct) => _store.AdvancesAsync(employeeId, ct);
         public Task<System.Collections.Generic.IReadOnlyList<EmployeePayroll>> PayrollAsync(long? employeeId, CancellationToken ct) => _store.PayrollAsync(employeeId, ct);
         public Task<WorkforcePage<CashierShift>> ShiftsAsync(WorkforceQuery q, long? owner, CancellationToken ct) => _store.ShiftsAsync(Query(q), owner, ct);

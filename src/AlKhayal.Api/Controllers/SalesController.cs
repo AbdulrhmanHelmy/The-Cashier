@@ -19,7 +19,20 @@ namespace AlKhayal.Api.Controllers
     {
         private readonly SalesService _sales;private readonly AuthService _auth;private readonly UserManagementService _users;private readonly FeatureService _features;
         public SalesController(SalesService sales,AuthService auth,UserManagementService users,FeatureService features){_sales=sales;_auth=auth;_users=users;_features=features;}
-        [HttpGet,Route("")] public async Task<IHttpActionResult> List(string search=null,string from=null,string to=null,CancellationToken ct=default(CancellationToken)){var a=await Require(ct,false).ConfigureAwait(false);if(a.Error!=null)return a.Error;try{return Ok(ApiEnvelope<object>.Ok(await _sales.ListAsync(search,from,to,ct).ConfigureAwait(false)));}catch(ArgumentException ex){return Bad(ex.Message);}}
+        [HttpGet, Route("page")]
+        public async Task<IHttpActionResult> Page(string search = null, long page = 1, int pageSize = 50, CancellationToken ct = default(CancellationToken))
+        {
+            var auth = await Require(ct, false).ConfigureAwait(false);
+            if (auth.Error != null) return auth.Error;
+            // An empty optional search can produce a Web API model-state error; only
+            // pagination conversion errors should reject this request.
+            if (ModelState.Any(x => (x.Key.Equals("page", StringComparison.OrdinalIgnoreCase) || x.Key.Equals("pageSize", StringComparison.OrdinalIgnoreCase)) && x.Value.Errors.Count != 0))
+                return Bad("رقم الصفحة أو عدد الفواتير في الصفحة غير صالح.");
+            try { return Ok(ApiEnvelope<object>.Ok(await _sales.ListPageAsync(search, page, pageSize, ct).ConfigureAwait(false))); }
+            catch (ArgumentException ex) { return Bad(ex.Message); }
+        }
+
+        [HttpGet,Route("")] public async Task<IHttpActionResult> List(string search=null,string from=null,string to=null,CancellationToken ct=default(CancellationToken),int? searchLimit=null){var a=await Require(ct,false).ConfigureAwait(false);if(a.Error!=null)return a.Error;try{return Ok(ApiEnvelope<object>.Ok(await _sales.ListAsync(search,from,to,ct,searchLimit).ConfigureAwait(false)));}catch(ArgumentException ex){return Bad(ex.Message);}}
         [HttpGet,Route("suspended-count")] public async Task<IHttpActionResult> SuspendedCount(CancellationToken ct){var a=await Require(ct,false).ConfigureAwait(false);if(a.Error!=null)return a.Error;return Ok(ApiEnvelope<object>.Ok(new{count=await _sales.CountSuspendedAsync(ct).ConfigureAwait(false)}));}
         [HttpGet,Route("{id:long}")] public async Task<IHttpActionResult> Get(long id,CancellationToken ct){var a=await Require(ct,false).ConfigureAwait(false);if(a.Error!=null)return a.Error;var sale=await _sales.GetForEditAsync(id,a.User.Id,ct).ConfigureAwait(false);return sale==null?Content(HttpStatusCode.NotFound,ApiEnvelope<object>.Fail("not_found","الفاتورة غير موجودة.")):Ok(ApiEnvelope<SaleInvoice>.Ok(sale));}
         [HttpGet,Route("installments/{id:long}/invoice")]

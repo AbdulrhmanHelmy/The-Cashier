@@ -35,6 +35,41 @@ namespace AlKhayal.Api.Controllers
             return Ok(ApiEnvelope<object>.Ok(_suppliers.GetAll()));
         }
 
+        private async Task<IHttpActionResult> RequireDirectory(CancellationToken ct)
+        {
+            var user = await _auth.GetCurrentUserAsync(ReadCookie(), ct).ConfigureAwait(false);
+            if (user == null) return UnauthorizedResult();
+            if (user.Role != UserRoles.Administrator)
+            {
+                var access = await _users.GetEffectiveAccessAsync(user, await _features.GetEffectiveAsync(ct).ConfigureAwait(false), ct).ConfigureAwait(false);
+                if (!access.ScreenIds.Contains("suppliers-list", StringComparer.OrdinalIgnoreCase))
+                    return Content(HttpStatusCode.Forbidden, ApiEnvelope<object>.Fail("screen_forbidden", "لا تملك صلاحية دليل الموردين."));
+            }
+            return null;
+        }
+
+        [HttpGet, Route("directory-search")]
+        public async Task<IHttpActionResult> DirectorySearch(string query = "", CancellationToken ct = default(CancellationToken))
+        {
+            var error = await RequireDirectory(ct).ConfigureAwait(false);
+            if (error != null) return error;
+            query = (query ?? "").Trim();
+            if (query.Length == 0 || query.Length > 120)
+                return Content(HttpStatusCode.BadRequest, ApiEnvelope<object>.Fail("validation", "أدخل عبارة بحث صالحة."));
+            var page = await _suppliers.ListAsync(query, 1, 20, ct).ConfigureAwait(false);
+            return Ok(ApiEnvelope<object>.Ok(new { page.TotalCount, Items = page.Items.Select(x => new { x.Id, x.Name, x.Code, x.Phone }) }));
+        }
+
+        [HttpGet, Route("directory-record/{id:long}")]
+        public async Task<IHttpActionResult> DirectoryRecord(long id, CancellationToken ct)
+        {
+            var error = await RequireDirectory(ct).ConfigureAwait(false);
+            if (error != null) return error;
+            var row = _suppliers.GetById(id);
+            if (row == null) return NotFoundResult("لا يمكن فتح هذا السجل.");
+            return Ok(ApiEnvelope<object>.Ok(new { row.Id, row.Name, row.Code, row.Phone }));
+        }
+
         [HttpGet, Route("{id:long}")]
         public async Task<IHttpActionResult> GetById(long id, CancellationToken ct)
         {

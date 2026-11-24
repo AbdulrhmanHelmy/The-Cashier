@@ -8,6 +8,7 @@ namespace AlKhayal.UI
     public sealed class TrialAccessForm : Form
     {
         private readonly LicenseService permanent;
+        private readonly bool dark;
         private readonly Func<ActivationForm> activationFormFactory;
         public TrialAccessForm(LicenseService permanent, Func<ActivationForm> activationFormFactory = null, bool? darkTheme = null)
             : this(permanent, new TrialResult(TrialState.Expired, TimeSpan.Zero), activationFormFactory, darkTheme)
@@ -21,7 +22,7 @@ namespace AlKhayal.UI
             AutoScaleMode = AutoScaleMode.Dpi; Font = new Font("Segoe UI", 10);
             StartPosition = FormStartPosition.CenterScreen; ClientSize = new Size(590, 345); MinimumSize = new Size(520, 330);
             MaximizeBox = false; MinimizeBox = false;
-            bool dark = darkTheme ?? ActivationSupport.DarkTheme();
+            dark = darkTheme ?? ActivationSupport.DarkTheme();
             BackColor = ActivationSupport.Background(dark); ForeColor = ActivationSupport.Foreground(dark);
             var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(24), ColumnCount = 1, RowCount = 3 };
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
@@ -48,7 +49,7 @@ namespace AlKhayal.UI
         private Button Button(string label, Action action)
         {
             var button = new Button { Text = label, AutoSize = true, MinimumSize = new Size(210, 42),
-                BackColor = ActivationSupport.Gold, ForeColor = ActivationSupport.Navy, FlatStyle = FlatStyle.Flat, Margin = new Padding(5) };
+                BackColor = ActivationSupport.Gold(dark), ForeColor = ActivationSupport.GoldInk, FlatStyle = FlatStyle.Flat, Margin = new Padding(5) };
             button.Click += (s, e) => action(); return button;
         }
 

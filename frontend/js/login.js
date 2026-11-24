@@ -17,23 +17,29 @@
   document.getElementById("togglePassword").addEventListener("click", function () { password.type = password.type === "password" ? "text" : "password"; this.textContent = password.type === "password" ? "إظهار" : "إخفاء"; this.setAttribute("aria-label", this.textContent + " كلمة المرور"); });
   fetch("/api/system/health", { credentials: "same-origin" }).then(function (response) { if (!response.ok) throw new Error(); status.textContent = "متصل بالخادم"; dot.style.background = "var(--success)"; }).catch(function () { status.textContent = "الخادم غير متاح"; dot.style.background = "var(--danger)"; });
 
+  function fieldError(input, message) {
+    document.getElementById(input.getAttribute("aria-describedby")).textContent = message || "";
+    if (message) input.setAttribute("aria-invalid", "true");
+    else input.removeAttribute("aria-invalid");
+  }
+
   form.addEventListener("submit", async function (event) {
-    event.preventDefault(); document.getElementById("usernameError").textContent = ""; document.getElementById("passwordError").textContent = ""; error.textContent = "";
-    if (!username.value.trim()) { document.getElementById("usernameError").textContent = "أدخل اسم المستخدم."; username.focus(); return; } if (!password.value) { document.getElementById("passwordError").textContent = "أدخل كلمة المرور."; password.focus(); return; }
-    button.disabled = true; spinner.hidden = false;
+    event.preventDefault(); if (button.disabled) return; fieldError(username); fieldError(password); error.textContent = "";
+    if (!username.value.trim()) { fieldError(username, "أدخل اسم المستخدم."); username.focus(); return; } if (!password.value) { fieldError(password, "أدخل كلمة المرور."); password.focus(); return; }
+    button.disabled = true; spinner.hidden = false; document.getElementById("buttonText").textContent = "جارٍ تسجيل الدخول…";
     try { await AlKhayalApi.request("/api/auth/login", { method: "POST", body: JSON.stringify({ username: cleanName(), password: password.value }) }); if (desktopCredentials) { if (remember.checked) desktopCredentials.save(cleanName(), password.value); else desktopCredentials.remove(cleanName()); } location.replace("/index.html"); }
     catch (loginError) { if (loginError.code === "invalid_credentials") error.textContent = "اسم المستخدم أو كلمة المرور غير صحيحة."; else if (loginError.code === "disabled_account") error.textContent = "هذا الحساب موقوف. راجع مسؤول النظام."; else if (loginError.code === "network_error") error.textContent = "تعذر الوصول إلى الخادم المحلي."; else error.textContent = loginError.message || "تعذر تسجيل الدخول."; }
-    finally { button.disabled = false; spinner.hidden = true; }
+    finally { button.disabled = false; spinner.hidden = true; document.getElementById("buttonText").textContent = "تسجيل الدخول"; }
   });
 
   bootstrapForm.addEventListener("submit", async function (event) {
-    event.preventDefault(); bootstrapError.textContent = ""; document.getElementById("bootstrapUsernameError").textContent = ""; document.getElementById("bootstrapPasswordError").textContent = ""; document.getElementById("bootstrapConfirmError").textContent = "";
-    if (!bootstrapUsername.value.trim()) { document.getElementById("bootstrapUsernameError").textContent = "أدخل اسم المستخدم."; bootstrapUsername.focus(); return; }
-    if (!bootstrapPassword.value) { document.getElementById("bootstrapPasswordError").textContent = "أدخل كلمة المرور."; bootstrapPassword.focus(); return; }
-    if (bootstrapPassword.value !== bootstrapConfirm.value) { document.getElementById("bootstrapConfirmError").textContent = "كلمة المرور وتأكيدها غير متطابقين."; bootstrapConfirm.focus(); return; }
-    bootstrapButton.disabled = true; bootstrapSpinner.hidden = false;
+    event.preventDefault(); if (bootstrapButton.disabled) return; bootstrapError.textContent = ""; fieldError(bootstrapUsername); fieldError(bootstrapPassword); fieldError(bootstrapConfirm);
+    if (!bootstrapUsername.value.trim()) { fieldError(bootstrapUsername, "أدخل اسم المستخدم."); bootstrapUsername.focus(); return; }
+    if (!bootstrapPassword.value) { fieldError(bootstrapPassword, "أدخل كلمة المرور."); bootstrapPassword.focus(); return; }
+    if (bootstrapPassword.value !== bootstrapConfirm.value) { fieldError(bootstrapConfirm, "كلمة المرور وتأكيدها غير متطابقين."); bootstrapConfirm.focus(); return; }
+    bootstrapButton.disabled = true; bootstrapSpinner.hidden = false; document.getElementById("bootstrapButtonText").textContent = "جارٍ إنشاء الحساب…";
     try { await AlKhayalApi.request("/api/auth/bootstrap", { method: "POST", body: JSON.stringify({ username: bootstrapUsername.value.trim(), password: bootstrapPassword.value, confirmPassword: bootstrapConfirm.value }) }); location.replace("/index.html"); }
     catch (setupError) { bootstrapError.textContent = setupError.message || "تعذر إنشاء حساب المدير."; if (setupError.code === "bootstrap_unavailable") { bootstrapPanel.hidden = true; form.hidden = false; } }
-    finally { bootstrapButton.disabled = false; bootstrapSpinner.hidden = true; }
+    finally { bootstrapButton.disabled = false; bootstrapSpinner.hidden = true; document.getElementById("bootstrapButtonText").textContent = "إنشاء حساب المدير"; }
   });
 }());

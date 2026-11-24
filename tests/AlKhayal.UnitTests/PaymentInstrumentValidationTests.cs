@@ -13,7 +13,7 @@ namespace AlKhayal.UnitTests
         {
             public string Identity;
             public Task<PaymentInstrument> SaveAsync(PaymentInstrument value,string identity,long actor,CancellationToken ct){Identity=identity;return Task.FromResult(value);}
-            public Task<IReadOnlyList<PaymentInstrument>> ListAsync(string type,bool activeOnly,CancellationToken ct)=>throw new NotImplementedException();
+            public Task<IReadOnlyList<PaymentInstrument>> ListAsync(string type,bool activeOnly,CancellationToken ct,string search=null,long? id=null)=>throw new NotImplementedException();
             public Task<PaymentHistoryPage> HistoryAsync(PaymentHistoryQuery q,CancellationToken ct)=>throw new NotImplementedException();
             public Task<PaymentOverview> OverviewAsync(CancellationToken ct)=>throw new NotImplementedException();
         }

@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using AlKhayal.Application.Finance;
 using AlKhayal.Core.Interfaces;
 using AlKhayal.Core.Models;
@@ -13,6 +15,13 @@ namespace AlKhayal.Application.Customers
     {
         private readonly ICustomerInstallmentRepository _repository;
         public InstallmentService(ICustomerInstallmentRepository repository) { _repository = repository; }
+
+        public Task<IReadOnlyList<CustomerInstallmentContract>> SearchAsync(string query, CancellationToken ct)
+        {
+            query = (query ?? "").Trim();
+            if (query.Length == 0 || query.Length > 120) throw new ArgumentException("أدخل عبارة بحث صالحة.");
+            return _repository.SearchAsync(query, ct);
+        }
 
         public CustomerInstallmentContract Create(long customerId, long productId, decimal productPrice, decimal downPayment,
             decimal interestRate, int count, int intervalMonths, string firstDueOn, string operationKey, long? treasuryAccountId = null, long actor = 0)

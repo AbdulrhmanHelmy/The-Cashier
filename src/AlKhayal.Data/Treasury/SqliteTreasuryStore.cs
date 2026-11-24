@@ -26,6 +26,21 @@ namespace AlKhayal.Data.Treasury
                 return (await c.QueryAsync<TreasuryAccount>(new CommandDefinition(AccountsSql + " ORDER BY a.Id", cancellationToken: ct)).ConfigureAwait(false)).ToList();
             }
         }
+        public async Task<IReadOnlyList<TreasuryAccount>> SearchAccountsAsync(string query, long? id, CancellationToken ct)
+        {
+            var like = "%" + query.Replace("!", "!!").Replace("%", "!%").Replace("_", "!_") + "%";
+            using (var c = new SQLiteConnection(_connectionString))
+            {
+                await c.OpenAsync(ct).ConfigureAwait(false);
+                var rows = await c.QueryAsync<TreasuryAccount>(new CommandDefinition(@"
+                    SELECT Id,Code,Name,Type FROM TreasuryAccounts WHERE IsDeleted=0
+                    AND ((@Id IS NOT NULL AND Id=@Id) OR (@Id IS NULL AND (Code LIKE @Like ESCAPE '!' OR Name LIKE @Like ESCAPE '!')))
+                    ORDER BY CASE WHEN Code=@Query COLLATE NOCASE THEN 0 ELSE 1 END,Id LIMIT 20",
+                    new { Query = query, Like = like, Id = id }, cancellationToken: ct)).ConfigureAwait(false);
+                return rows.ToList();
+            }
+        }
+
         public async Task<InstallmentReceivableSummary> GetInstallmentReceivableAsync(CancellationToken ct)
         {
             using (var c = new SQLiteConnection(_connectionString))

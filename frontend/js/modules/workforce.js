@@ -83,6 +83,11 @@
     var host = pageHost(screen, container, '<button class="button primary" data-new>إضافة موظف جديد</button>', field('search', 'بحث بالاسم أو الهاتف أو الكود', q.search, 'search') + select('status', 'الحالة', q.status, [{ value: '', label: 'الكل' }, { value: 'active', label: 'نشط' }, { value: 'inactive', label: 'مؤرشف' }]));
     var load = loader(context, host, function () { return Api.request(base + 'employees?' + qs(q)); }, function (page) {
       rows = page.items;
+      if (context.state.globalSearchEmployeeId) {
+        rows = rows.filter(function (row) { return row.id === context.state.globalSearchEmployeeId; });
+        context.state.globalSearchEmployeeId = null;
+        if (!rows.length) { host.innerHTML = '<div class="empty-state" role="alert">لا يمكن فتح هذا السجل</div>'; return; }
+      }
       host.innerHTML = table(['رقم الموظف', 'الموظف', 'الهاتف', 'الوظيفة', 'الحالة', ''], rows.map(function (e) {
         return '<tr><td>' + esc(e.code) + '</td><td>' + esc(e.name) + '</td><td>' + esc(e.phone) + '</td><td>' + esc(e.jobTitle) + '</td><td>' + (e.isActive ? 'نشط' : 'مؤرشف') + '</td><td><button class="button" data-employee="' + e.id + '">تعديل</button>' + (e.isActive ? '<button class="button" data-archive="' + e.id + '">مسح / أرشفة</button>' : '') + '</td></tr>';
       })) + pager(page);
@@ -119,12 +124,23 @@
     var host = pageHost(screen, container, '<button class="button primary" data-in>تسجيل حضور</button>', field('search', 'بحث باسم الموظف', q.search, 'search') + dates(q) + select('status', 'الحالة', q.status, [{ value: '', label: 'الكل' }, { value: 'open', label: 'حاضر الآن' }, { value: 'closed', label: 'انصرف' }]));
     var load = loader(context, host, function () { return Api.request(base + 'attendance?' + qs(q)); }, function (page) {
       rows = page.items;
+      if (context.state.globalSearchAttendanceId) {
+        rows = rows.filter(function (row) { return row.id === context.state.globalSearchAttendanceId; });
+        if (!rows.length) { host.innerHTML = '<div class="empty-state" role="alert">لا يمكن فتح هذا السجل</div>'; return; }
+        page = { page: 1, pageSize: page.pageSize, total: 1 };
+      }
       host.innerHTML = '<p class="muted workforce-note">وقت الحضور والتاريخ يسجلان تلقائيًا. سجّل مدة كل بريك بالدقائق؛ تُخصم من ساعات العمل الفعلية.</p>' + table(['رقم العملية', 'الموظف', 'الحضور', 'الانصراف', 'البريك', 'العمل الفعلي', ''], rows.map(function (r) {
         return '<tr><td>ATT-' + esc(String(r.id).padStart(6, '0')) + '</td><td>' + esc(r.employeeName) + '</td><td>' + esc(time(r.checkInUtc)) + '</td><td>' + esc(r.checkOutUtc ? time(r.checkOutUtc) : 'حاضر الآن') + '</td><td>' + esc(r.breakMinutes || 0) + ' د</td><td>' + Math.floor(r.workedSeconds / 3600) + ' س ' + Math.floor(r.workedSeconds % 3600 / 60) + ' د</td><td>' + (!r.checkOutUtc ? '<button class="button" data-break="' + r.id + '">تسجيل بريك</button><button class="button primary" data-out="' + r.id + '">انصراف</button>' : '') + '<button class="button" data-correct="' + r.id + '">تصحيح إداري</button><button class="button" data-attendance-audit="' + r.id + '">سجل التعديلات</button></td></tr>';
       })) + pager(page);
     });
     container.querySelector('[data-in]').onclick = function () { employeePicker(context, function (e) { editModal(context, 'attendance-in-' + e.id, 'حضور ' + e.name, function () { return '<p>تسجيل الحضور بالتوقيت الحالي.</p>'; }, function () { return { employeeId: e.id }; }, 'attendance/in', load); }); };
-    wireFilters(container, q, load);
+    wireFilters(container, q, function () {
+      if (context.state.globalSearchAttendanceId) {
+        delete context.state.globalSearchAttendanceId;
+        delete q.employeeId;
+      }
+      load();
+    });
     host.onclick = function (event) {
       var out = event.target.closest('[data-out]'), brk = event.target.closest('[data-break]'), correct = event.target.closest('[data-correct]'), audit = event.target.closest('[data-attendance-audit]');
       if (audit) { attendanceAudit(context, Number(audit.getAttribute('data-attendance-audit'))); return; }
@@ -140,34 +156,41 @@
   }
   function employeeOptions(items, selected, includeInactive) { return [{ value: '', label: 'اختر الموظف' }].concat(items.filter(function (e) { return includeInactive || e.isActive; }).map(function (e) { return { value: e.id, label: e.code + ' — ' + e.name + (e.isActive ? '' : ' (مؤرشف)') }; })); }
   function advances(screen, container, context) {
-    var staff = [], accounts = [], q = { employeeId: '' };
+    var staff = [], accounts = [], q = { employeeId: '', page: 1 }, loadVersion = 0;
     container.innerHTML = UI.pageHeader(screen, '<button class="button primary" data-add-advance>تسجيل سلفة</button>') + '<section class="card"><div class="card-body">' + select('employeeId', 'الموظف', '', [{ value: '', label: 'كل الموظفين' }]) + '</div><div data-advance-results></div></section>';
     var picker = container.querySelector('[name="employeeId"]'), host = container.querySelector('[data-advance-results]');
-    function load() { var query = q.employeeId ? '?employeeId=' + encodeURIComponent(q.employeeId) : ''; host.innerHTML = '<div class="empty-state">جارٍ التحميل…</div>'; Api.request(base + 'advances' + query).then(function (rows) { if (!active(context)) return; host.innerHTML = table(['رقم العملية', 'الموظف', 'التاريخ والوقت', 'المبلغ', 'حالة السلفة', 'حركة الخزنة', 'ملاحظات'], rows.map(function (r) { return '<tr><td>ADV-' + esc(String(r.id).padStart(6, '0')) + '</td><td>' + esc(r.employeeName) + '</td><td>' + esc(time(r.createdUtc)) + '</td><td>' + esc(r.amount) + '</td><td>' + (r.isSettled ? 'خُصمت من راتب' : 'مستحقة للخصم') + '</td><td>TR-' + esc(String(r.treasuryMovementId).padStart(6, '0')) + '</td><td>' + esc(r.notes || '—') + '</td></tr>'; })); }).catch(function (e) { if (active(context)) host.innerHTML = '<div class="empty-state" role="alert">' + esc(e.message) + '</div>'; }); }
+    function load() { var version = ++loadVersion, query = '?page=' + q.page + (q.employeeId ? '&employeeId=' + encodeURIComponent(q.employeeId) : ''); host.innerHTML = '<div class="empty-state">جارٍ التحميل…</div>'; Api.request(base + 'advances/history' + query).then(function (result) { if (!active(context) || version !== loadVersion) return; q.page = result.page; var rows = result.items; host.innerHTML = table(['رقم العملية', 'الموظف', 'التاريخ والوقت', 'المبلغ', 'حالة السلفة', 'حركة الخزنة', 'ملاحظات'], rows.map(function (r) { return '<tr><td>ADV-' + esc(String(r.id).padStart(6, '0')) + '</td><td>' + esc(r.employeeName) + '</td><td>' + esc(time(r.createdUtc)) + '</td><td>' + esc(r.amount) + '</td><td>' + (r.isSettled ? 'خُصمت من راتب' : 'مستحقة للخصم') + '</td><td>TR-' + esc(String(r.treasuryMovementId).padStart(6, '0')) + '</td><td>' + esc(r.notes || '—') + '</td></tr>'; })) + pager(result); }).catch(function (e) { if (active(context) && version === loadVersion) host.innerHTML = '<div class="empty-state" role="alert">' + esc(e.message) + '</div>'; }); }
     Promise.all([Api.request(base + 'employees?page=1&pageSize=100'), Api.request('/api/treasury/accounts')]).then(function (data) { if (!active(context)) return; staff = data[0].items; accounts = data[1].filter(function (a) { return !a.isDeleted; }); picker.innerHTML = [{ value: '', label: 'كل الموظفين' }].concat(employeeOptions(staff, '', true).slice(1)).map(function (o) { return '<option value="' + esc(o.value) + '">' + esc(o.label) + '</option>'; }).join(''); load(); }).catch(function (e) { host.innerHTML = '<div class="empty-state" role="alert">' + esc(e.message) + '</div>'; });
-    picker.onchange = function () { q.employeeId = picker.value; load(); };
+    picker.onchange = function () { q.employeeId = picker.value; q.page = 1; load(); };
+    host.onclick = function (event) { var button = event.target.closest('[data-page]'); if (button && !button.disabled) { q.page = Number(button.getAttribute('data-page')); load(); } };
     container.querySelector('[data-add-advance]').onclick = function () { if (!accounts.length) { UI.toast('أضف خزنة أو بنكًا نشطًا قبل تسجيل السلفة.', 'warning'); return; } editModal(context, 'advance-new', 'تسجيل سلفة', function (v) { return select('employeeId', 'الموظف', v.employeeId, employeeOptions(staff)) + field('amount', 'مبلغ السلفة', v.amount, 'number', true) + select('treasuryAccountId', 'الخزنة أو البنك الذي صُرفت منه', v.treasuryAccountId || accounts[0].id, accounts.map(function (a) { return { value: a.id, label: a.name + ' — الرصيد ' + a.balance }; })) + field('notes', 'ملاحظات (اختياري)', v.notes, 'text'); }, function (v) { if (!v.employeeId) throw new Error('اختر الموظف.'); if (!v.treasuryAccountId) throw new Error('اختر الخزنة أو البنك.'); return { employeeId: Number(v.employeeId), amount: money(v.amount, false, true), treasuryAccountId: Number(v.treasuryAccountId), notes: v.notes }; }, 'advances', function (result) { UI.toast('تم تسجيل السلفة رقم ADV-' + String(result.id).padStart(6, '0') + ' وسحبها من الخزنة. ستظهر في حساب الراتب.', 'success'); load(); }); };
   }
   function payroll(screen, container, context) {
     var staff = [], accounts = [], selected = '', now = new Date(), period = now.getFullYear() + '-' + ('0' + (now.getMonth() + 1)).slice(-2);
+    var loadVersion = 0, historyPage = 1;
     container.innerHTML = UI.pageHeader(screen) + '<section class="card"><div class="card-body form-grid">' + select('employeeId', 'الموظف', '', [{ value: '', label: 'جارٍ تحميل الموظفين…' }]) + field('period', 'شهر الراتب', period, 'month', true) + '<div class="span-2" data-payroll-quote></div><div class="span-2"><button type="button" class="button primary" data-pay disabled>دفع الراتب</button></div></div><div data-payroll-results></div></section>';
     var picker = container.querySelector('[name="employeeId"]'), month = container.querySelector('[name="period"]'), quote = container.querySelector('[data-payroll-quote]'), pay = container.querySelector('[data-pay]'), host = container.querySelector('[data-payroll-results]');
     function load() {
+      var version = ++loadVersion;
       selected = picker.value; period = month.value; pay.disabled = true; quote.textContent = 'اختر الموظف لعرض الراتب والسلف المسجلة.';
-      if (!selected) { host.innerHTML = ''; return; }
-      Promise.all([Api.request(base + 'payroll?employeeId=' + encodeURIComponent(selected)), Api.request(base + 'advances?employeeId=' + encodeURIComponent(selected))]).then(function (data) {
-        if (!active(context)) return;
-        var e = staff.find(function (x) { return String(x.id) === String(selected); }), history = data[0], advancesList = data[1];
-        var pending = advancesList.filter(function (a) { return !a.isSettled; }).reduce(function (sum, a) { return sum + Math.round(Number(a.amount) * 100); }, 0);
+      host.innerHTML = '';
+      if (!selected) return;
+      quote.textContent = 'جارٍ تحميل الراتب والسلف المسجلة…';
+      Api.request(base + 'payroll/history?employeeId=' + encodeURIComponent(selected) + '&period=' + encodeURIComponent(period) + '&page=' + historyPage).then(function (data) {
+        if (!active(context) || version !== loadVersion) return;
+        var e = staff.find(function (x) { return String(x.id) === String(selected); }), history = data.history.items;
+        historyPage = data.history.page;
+        var pending = Math.round(Number(data.pendingAdvance) * 100);
         var salary = e && e.salary != null ? Math.round(Number(e.salary) * 100) : null, net = salary == null ? null : Math.max(0, salary - pending);
         quote.innerHTML = '<dl class="workforce-summary"><div><dt>الراتب الشهري</dt><dd>' + esc(e && e.salary != null ? e.salary : 'غير محدد') + '</dd></div><div><dt>السلف غير المخصومة</dt><dd>' + esc((pending / 100).toFixed(2)) + '</dd></div><div><dt>صافي المستحق</dt><dd>' + esc(net == null ? '—' : (net / 100).toFixed(2)) + '</dd></div></dl>';
-        var already = history.some(function (p) { return p.period === period; }); pay.disabled = salary == null || !e.isActive || already || pending > salary || !period || !accounts.length;
+        var already = data.alreadyPaid; pay.disabled = salary == null || !e.isActive || already || pending > salary || !period || !accounts.length;
         if (pending > salary) quote.innerHTML += '<p class="field-error">السلف المسجلة تتجاوز الراتب؛ لا يمكن اعتماد صافي سالب.</p>';
-        host.innerHTML = table(['رقم العملية', 'الفترة', 'تاريخ الصرف', 'الراتب', 'السلف المخصومة', 'الصافي', 'رقم حركة الخزنة'], history.map(function (p) { return '<tr><td>PAY-' + esc(String(p.id).padStart(6, '0')) + '</td><td>' + esc(p.period) + '</td><td>' + esc(time(p.paidUtc)) + '</td><td>' + esc(p.salary) + '</td><td>' + esc(p.advances) + '</td><td>' + esc(p.net) + '</td><td>' + esc(p.treasuryMovementId ? 'TR-' + String(p.treasuryMovementId).padStart(6, '0') : 'صافي صفر') + '</td></tr>'; }));
-      }).catch(function (e) { if (active(context)) quote.innerHTML = '<p class="field-error">' + esc(e.message) + '</p>'; });
+        host.innerHTML = table(['رقم العملية', 'الفترة', 'تاريخ الصرف', 'الراتب', 'السلف المخصومة', 'الصافي', 'رقم حركة الخزنة'], history.map(function (p) { return '<tr><td>PAY-' + esc(String(p.id).padStart(6, '0')) + '</td><td>' + esc(p.period) + '</td><td>' + esc(time(p.paidUtc)) + '</td><td>' + esc(p.salary) + '</td><td>' + esc(p.advances) + '</td><td>' + esc(p.net) + '</td><td>' + esc(p.treasuryMovementId ? 'TR-' + String(p.treasuryMovementId).padStart(6, '0') : 'صافي صفر') + '</td></tr>'; })) + pager(data.history);
+      }).catch(function (e) { if (active(context) && version === loadVersion) quote.innerHTML = '<p class="field-error">' + esc(e.message) + '</p>'; });
     }
     Promise.all([Api.request(base + 'employees?page=1&pageSize=100'), Api.request('/api/treasury/accounts')]).then(function (data) { if (!active(context)) return; staff = data[0].items; accounts = data[1].filter(function (a) { return !a.isDeleted; }); picker.innerHTML = employeeOptions(staff, '', true).map(function (o) { return '<option value="' + esc(o.value) + '">' + esc(o.label) + '</option>'; }).join(''); }).catch(function (e) { quote.textContent = e.message; });
-    picker.onchange = load; month.onchange = load;
+    picker.onchange = month.onchange = function () { historyPage = 1; load(); };
+    host.onclick = function (event) { var button = event.target.closest('[data-page]'); if (button && !button.disabled) { historyPage = Number(button.getAttribute('data-page')); load(); } };
     pay.onclick = function () { if (!selected || !period || !accounts.length) return; var e = staff.find(function (x) { return String(x.id) === String(selected); }); editModal(context, 'payroll-' + selected + '-' + period, 'تأكيد صرف راتب ' + e.name, function (v) { return '<p>سيتم حفظ الراتب الشهري وخصم السلف غير المخصومة. يُسجل صافي المستحق كسحب من الخزنة المختارة في نفس المعاملة.</p>' + select('treasuryAccountId', 'الخزنة أو البنك', v.treasuryAccountId || accounts[0].id, accounts.map(function (a) { return { value: a.id, label: a.name + ' — الرصيد ' + a.balance }; })); }, function (v) { if (!v.treasuryAccountId) throw new Error('اختر الخزنة أو البنك.'); return { employeeId: Number(selected), period: period, treasuryAccountId: Number(v.treasuryAccountId) }; }, 'payroll/pay', function (result) { UI.toast('تم صرف الراتب برقم PAY-' + String(result.id).padStart(6, '0'), 'success'); load(); }); };
   }
   function attendanceAudit(context, id) {

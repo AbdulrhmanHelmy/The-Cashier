@@ -10,7 +10,9 @@ namespace AlKhayal.Core.Interfaces
         Task<PurchaseInvoice> CreateDraftAsync(PurchaseDraftCommand command, long totalScaled, long userId, CancellationToken cancellationToken);
         Task<PurchaseInvoice> UpdateDraftAsync(long id, PurchaseDraftCommand command, long totalScaled, long userId, CancellationToken cancellationToken);
         Task<PurchaseInvoice> GetAsync(long id, CancellationToken cancellationToken);
+        Task<PurchaseInvoicePage> ListPageAsync(long page, CancellationToken cancellationToken);
         Task<IReadOnlyList<PurchaseInvoice>> ListAsync(long? supplierId, string from, string to, CancellationToken cancellationToken);
+        Task<IReadOnlyList<PurchaseInvoice>> SearchDirectoryAsync(string query, CancellationToken cancellationToken);
         Task<PurchasePostResult> PostAsync(long id, long expectedVersion, string operationKey, string requestHash, long userId, CancellationToken cancellationToken);
         Task<IReadOnlyList<PurchaseReturnLine>> ReturnableLinesAsync(long id, long warehouseId, CancellationToken cancellationToken);
         Task<PurchaseReturn> PostReturnAsync(long id, PurchaseReturnCommand command, string operationKey, string requestHash, long userId, CancellationToken cancellationToken);

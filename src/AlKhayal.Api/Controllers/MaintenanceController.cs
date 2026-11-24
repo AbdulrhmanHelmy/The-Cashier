@@ -42,10 +42,23 @@ namespace AlKhayal.Api.Controllers
         }
 
         [HttpGet,Route("")]
-        public async Task<IHttpActionResult> List(long? customerId=null,CancellationToken ct=default(CancellationToken))
+        public async Task<IHttpActionResult> List(long? customerId=null,CancellationToken ct=default(CancellationToken),long? ticketId=null)
         {
             if(!await IsAuthenticated(ct))return UnauthorizedResult();if(!await CanUse("maintenance-tracking",ct))return Denied();
-            try{return Ok(ApiEnvelope<object>.Ok(_maintenance.List(customerId)));}catch(ArgumentException ex){return Content(HttpStatusCode.BadRequest,ApiEnvelope<object>.Fail("validation",ex.Message));}
+            try{return Ok(ApiEnvelope<object>.Ok(_maintenance.List(customerId,ticketId)));}catch(ArgumentException ex){return Content(HttpStatusCode.BadRequest,ApiEnvelope<object>.Fail("validation",ex.Message));}
+        }
+
+        [HttpGet, Route("directory-search")]
+        public async Task<IHttpActionResult> DirectorySearch(string query = "", CancellationToken ct = default(CancellationToken))
+        {
+            if (!await IsAuthenticated(ct).ConfigureAwait(false)) return UnauthorizedResult();
+            if (!await CanUse("maintenance-tracking", ct).ConfigureAwait(false)) return Denied();
+            try
+            {
+                var rows = await _maintenance.SearchAsync(query, ct).ConfigureAwait(false);
+                return Ok(ApiEnvelope<object>.Ok(rows.Select(x => new { x.Id, x.TicketNumber, x.Device, x.CustomerName })));
+            }
+            catch (ArgumentException ex) { return Content(HttpStatusCode.BadRequest, ApiEnvelope<object>.Fail("validation", ex.Message)); }
         }
 
         [HttpPost,Route("")]

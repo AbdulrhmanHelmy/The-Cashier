@@ -24,6 +24,24 @@
 
   function directory(screen, container, context) {
     var rows = [], receivable = null, token = 0, state = context.state;
+    if (state.globalSearchTreasuryId) { selectedAccount(); return; }
+    function selectedAccount() {
+      var id = state.globalSearchTreasuryId;
+      var current = context.isCurrent || context.isActive;
+      paint('<p role="status">جارٍ تحميل الحساب…</p>');
+      Api.request("/api/treasury/accounts/directory-search?id=" + id).then(function (items) {
+        if (!current()) return;
+        var row = items.find(function (item) { return item.id === id; });
+        if (!row) throw new Error("Account unavailable");
+        paint('<h2>' + U.escape(row.name) + '</h2><p><bdi>' + U.escape(row.code) + '</bdi> · ' +
+          U.escape(accountType(row.type)) + '</p>');
+      }).catch(function () { if (current()) paint('<p role="alert">لا يمكن فتح هذا السجل</p>'); });
+      function paint(body) {
+        container.innerHTML = UI.pageHeader(screen) + '<section class="card"><div class="card-body">' + body +
+          '<button class="button" type="button" data-treasury-back>العودة إلى الحسابات</button></div></section>';
+        container.querySelector("[data-treasury-back]").onclick = function () { context.navigate(screen.route, {}); };
+      }
+    }
     container.innerHTML = UI.pageHeader(screen, '<button class="button primary" data-account-add>+ إضافة خزنة أو بنك</button>') +
       '<div class="treasury-center"><div class="treasury-summary" data-treasury-summary aria-live="polite"></div><section class="card treasury-directory"><div class="card-body treasury-toolbar">' + field("treasurySearch", "بحث بالاسم أو الكود", state.treasurySearch, 'type="search"') +
       '<p class="muted">الحسابات ذات الحركات المالية لا يمكن حذفها.</p><p class="field-error" data-treasury-error role="alert" hidden></p></div><div data-treasury-results aria-live="polite"></div></section></div>';

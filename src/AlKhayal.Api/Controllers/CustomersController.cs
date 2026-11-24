@@ -31,11 +31,46 @@ namespace AlKhayal.Api.Controllers
             if (!await IsAuthenticated(ct)) return UnauthorizedResult();
             return Ok(ApiEnvelope<object>.Ok(_customers.GetAll()));
         }
+        [HttpGet, Route("page")]
+        public async Task<IHttpActionResult> Page(CancellationToken ct, string search = "", long page = 1, int pageSize = 50, string sort = "code", bool descending = false)
+        {
+            if (!await IsAuthenticated(ct).ConfigureAwait(false)) return UnauthorizedResult();
+            if (!await CanUseScreen("customers-list", ct).ConfigureAwait(false))
+                return Content(HttpStatusCode.Forbidden, ApiEnvelope<object>.Fail("screen_forbidden", "لا تملك صلاحية دليل العملاء."));
+            if (!ModelState.IsValid) return Content(HttpStatusCode.BadRequest, ApiEnvelope<object>.Fail("validation", "بيانات غير صالحة."));
+            try { return Ok(ApiEnvelope<object>.Ok(await _customers.ListPageAsync(search, page, pageSize, sort, descending, ct).ConfigureAwait(false))); }
+            catch (ArgumentException ex) { return Content(HttpStatusCode.BadRequest, ApiEnvelope<object>.Fail("validation", ex.Message)); }
+        }
+
         [HttpGet, Route("search")]
         public async Task<IHttpActionResult> Search(string query="",CancellationToken ct=default(CancellationToken))
         {
             if (!await IsAuthenticated(ct)) return UnauthorizedResult();
             return Ok(ApiEnvelope<object>.Ok(await _customers.SearchAsync(query,ct).ConfigureAwait(false)));
+        }
+
+        [HttpGet, Route("directory-search")]
+        public async Task<IHttpActionResult> DirectorySearch(string query = "", CancellationToken ct = default(CancellationToken))
+        {
+            if (!await IsAuthenticated(ct).ConfigureAwait(false)) return UnauthorizedResult();
+            if (!await CanUseScreen("customers-list", ct).ConfigureAwait(false))
+                return Content(HttpStatusCode.Forbidden, ApiEnvelope<object>.Fail("screen_forbidden", "لا تملك صلاحية دليل العملاء."));
+            query = (query ?? "").Trim();
+            if (query.Length == 0 || query.Length > 120)
+                return Content(HttpStatusCode.BadRequest, ApiEnvelope<object>.Fail("validation", "أدخل عبارة بحث صالحة."));
+            var rows = await _customers.SearchAsync(query, ct).ConfigureAwait(false);
+            return Ok(ApiEnvelope<object>.Ok(rows.Select(x => new { x.Id, x.Name, x.Code, x.Phone })));
+        }
+
+        [HttpGet, Route("directory-record/{id:long}")]
+        public async Task<IHttpActionResult> DirectoryRecord(long id, CancellationToken ct)
+        {
+            if (!await IsAuthenticated(ct).ConfigureAwait(false)) return UnauthorizedResult();
+            if (!await CanUseScreen("customers-list", ct).ConfigureAwait(false))
+                return Content(HttpStatusCode.Forbidden, ApiEnvelope<object>.Fail("screen_forbidden", "لا تملك صلاحية دليل العملاء."));
+            var row = _customers.GetById(id);
+            if (row == null) return Content(HttpStatusCode.NotFound, ApiEnvelope<object>.Fail("not_found", "لا يمكن فتح هذا السجل."));
+            return Ok(ApiEnvelope<object>.Ok(new { row.Id, row.Name, row.Code, row.Phone }));
         }
 
         [HttpPost, Route("")]
@@ -68,13 +103,16 @@ namespace AlKhayal.Api.Controllers
 
 
         [HttpGet, Route("{id:long}/statement")]
-        public async Task<IHttpActionResult> GetStatement(long id, string from = null, string to = null, CancellationToken ct = default(CancellationToken))
+        public async Task<IHttpActionResult> GetStatement(long id, string from = null, string to = null, CancellationToken ct = default(CancellationToken), long? page = null, int pageSize = 50)
         {
             if (!await IsAuthenticated(ct)) return UnauthorizedResult();
             if(!await CanUseStatement(ct))return Content(HttpStatusCode.Forbidden,ApiEnvelope<object>.Fail("screen_forbidden","لا تملك صلاحية كشف حساب العميل."));
             try
             {
-                var statement = _accounts.GetStatement(id, from, to);
+                if (!ModelState.IsValid) return Content(HttpStatusCode.BadRequest, ApiEnvelope<object>.Fail("validation", "بيانات غير صالحة."));
+                var statement = page.HasValue
+                    ? await _accounts.GetStatementPageAsync(id, from, to, page.Value, pageSize, ct).ConfigureAwait(false)
+                    : _accounts.GetStatement(id, from, to);
                 return statement == null ? (IHttpActionResult)Content(HttpStatusCode.NotFound, ApiEnvelope<object>.Fail("not_found", "العميل غير موجود.")) : Ok(ApiEnvelope<object>.Ok(statement));
             }
             catch (ArgumentException ex) { return Content(HttpStatusCode.BadRequest, ApiEnvelope<object>.Fail("validation", ex.Message)); }
@@ -136,6 +174,20 @@ namespace AlKhayal.Api.Controllers
                 System.Diagnostics.Trace.TraceError("Installment contract read failed for customer {0}: {1}", id, ex);
                 return Content(HttpStatusCode.InternalServerError, ApiEnvelope<object>.Fail("installment_read_failed", "تعذر قراءة عقود الأقساط. راجع سجل التطبيق لمعرفة سبب الخطأ."));
             }
+        }
+
+        [HttpGet, Route("installment-search")]
+        public async Task<IHttpActionResult> InstallmentSearch(string query = "", CancellationToken ct = default(CancellationToken))
+        {
+            if (!await IsAuthenticated(ct).ConfigureAwait(false)) return UnauthorizedResult();
+            if (!await CanUseScreen("installment-payment", ct).ConfigureAwait(false))
+                return Content(HttpStatusCode.Forbidden, ApiEnvelope<object>.Fail("screen_forbidden", "لا تملك صلاحية سداد الأقساط."));
+            try
+            {
+                var rows = await _installments.SearchAsync(query, ct).ConfigureAwait(false);
+                return Ok(ApiEnvelope<object>.Ok(rows.Select(x => new { x.Id, x.CustomerId, x.ContractNumber, x.CustomerName })));
+            }
+            catch (ArgumentException ex) { return Content(HttpStatusCode.BadRequest, ApiEnvelope<object>.Fail("validation", ex.Message)); }
         }
 
         [HttpPost, Route("{id:long}/installments")]

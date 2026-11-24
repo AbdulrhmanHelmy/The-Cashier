@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Data.SQLite;
@@ -16,9 +17,38 @@ namespace AlKhayal.Data.Returns
             FROM SalesReturns r JOIN SalesInvoices i ON i.Id=r.SalesInvoiceId LEFT JOIN SalesInvoices root ON root.Id=i.RootInvoiceId LEFT JOIN Customers p ON p.Id=i.CustomerId JOIN Warehouses w ON w.Id=i.WarehouseId JOIN Users u ON u.Id=r.CreatedByUserId
             UNION ALL SELECT r.Id,'purchase','PUR-RET-'||r.Id,r.PurchaseInvoiceId,i.InvoiceNumber,p.Name,w.Name,r.CreatedUtc,u.DisplayName,'',r.TotalScaled,CASE WHEN r.ReturnMode='cash_refund' THEN r.TotalScaled ELSE 0 END,0,CASE WHEN r.ReturnMode='cash_refund' THEN 'cash' ELSE 'credit' END
             FROM PurchaseReturns r JOIN PurchaseInvoices i ON i.Id=r.PurchaseInvoiceId JOIN Suppliers p ON p.Id=r.SupplierId JOIN Warehouses w ON w.Id=r.WarehouseId JOIN Users u ON u.Id=r.CreatedByUserId WHERE r.Status='posted'";
-        public async Task<IReadOnlyList<ReturnRecord>> ListAsync(string search, CancellationToken ct)
+        public Task<ReturnHistoryPage> ListPageAsync(string search, long page, int pageSize, CancellationToken ct)
         {
-            using (var c = new SQLiteConnection(_cs)) { await c.OpenAsync(ct).ConfigureAwait(false); return (await c.QueryAsync<ReturnRecord>(new CommandDefinition("SELECT * FROM (" + Records + ") WHERE @search='' OR instr(Number,@search)>0 OR instr(InvoiceNumber,@search)>0 OR instr(PartyName,@search)>0 ORDER BY CreatedUtc DESC,Type,Id DESC LIMIT 200", new { search }, cancellationToken: ct)).ConfigureAwait(false)).ToList(); }
+            return Task.Run(async () =>
+            {
+                using (var c = new SQLiteConnection(_cs))
+                {
+                    await c.OpenAsync(ct).ConfigureAwait(false);
+                    using (var tx = c.BeginTransaction(System.Data.IsolationLevel.ReadCommitted))
+                    {
+                        var source = " FROM (" + Records + ")" + (search.Length == 0 ? "" :
+                            " WHERE instr(Number,@Search)>0 OR instr(InvoiceNumber,@Search)>0 OR instr(PartyName,@Search)>0");
+                        var count = await c.ExecuteScalarAsync<long>(new CommandDefinition("SELECT COUNT(*)" + source,
+                            new { Search = search }, tx, cancellationToken: ct)).ConfigureAwait(false);
+                        var currentPage = Math.Min(page, Math.Max(1, count / pageSize + (count % pageSize == 0 ? 0 : 1)));
+                        IReadOnlyList<ReturnRecord> items = Array.Empty<ReturnRecord>();
+                        if (count > 0)
+                        {
+                            items = (await c.QueryAsync<ReturnRecord>(new CommandDefinition("SELECT *" + source +
+                                " ORDER BY CreatedUtc DESC,Type,Id DESC LIMIT @Limit OFFSET @Offset",
+                                new { Search = search, Limit = pageSize, Offset = (currentPage - 1) * pageSize }, tx,
+                                cancellationToken: ct)).ConfigureAwait(false)).AsList();
+                        }
+                        tx.Commit();
+                        return new ReturnHistoryPage { Items = items, Page = currentPage, PageSize = pageSize, TotalCount = count };
+                    }
+                }
+            }, ct);
+        }
+
+        public async Task<IReadOnlyList<ReturnRecord>> ListAsync(string search, CancellationToken ct, int? searchLimit = null)
+        {
+            using (var c = new SQLiteConnection(_cs)) { await c.OpenAsync(ct).ConfigureAwait(false); return (await c.QueryAsync<ReturnRecord>(new CommandDefinition("SELECT * FROM (" + Records + ") WHERE @search='' OR instr(Number,@search)>0 OR instr(InvoiceNumber,@search)>0 OR instr(PartyName,@search)>0 ORDER BY CASE WHEN @Rank=1 AND Number=@search THEN 0 ELSE 1 END,CreatedUtc DESC,Type,Id DESC LIMIT @Limit", new { search, Limit = searchLimit ?? 200, Rank = searchLimit.HasValue ? 1 : 0 }, cancellationToken: ct)).ConfigureAwait(false)).ToList(); }
         }
         public async Task<long?> FindInvoiceAsync(string type, string number, CancellationToken ct)
         {

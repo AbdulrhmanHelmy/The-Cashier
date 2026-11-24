@@ -27,6 +27,7 @@ namespace AlKhayal.Application.Settings
         public bool TaxEnabled { get; set; }
         public decimal DefaultTaxRate { get; set; }
         public bool PricesIncludeTax { get; set; }
+        public bool ShowCashChangeCalculator { get; set; } = true;
         public DateTime UpdatedUtc { get; set; }
     }
 
@@ -41,7 +42,11 @@ namespace AlKhayal.Application.Settings
     }
 
     public sealed class UpdateCompanyProfileCommand : CompanyProfile { public long ChangedByUserId { get; set; } }
-    public sealed class UpdateGeneralSettingsCommand : GeneralSettings { public long ChangedByUserId { get; set; } }
+    public sealed class UpdateGeneralSettingsCommand : GeneralSettings
+    {
+        public long ChangedByUserId { get; set; }
+        public bool? ShowCashChangeCalculatorOverride { get; set; }
+    }
 
     public sealed class SettingsResult<T>
     {

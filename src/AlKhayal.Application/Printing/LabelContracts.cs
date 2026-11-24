@@ -42,6 +42,7 @@ namespace AlKhayal.Application.Printing
         public LabelStock Stock { get; set; } = new LabelStock();
         public List<LabelElement> Elements { get; set; } = new List<LabelElement>();
         public string LogoPngBase64 { get; set; }
+        public bool UseConfiguredTextAlignment { get; set; }
     }
     public sealed class LabelPrinterProfile
     {
@@ -58,6 +59,25 @@ namespace AlKhayal.Application.Printing
         public string DefaultProfileId { get; set; } = "labels-default";
         public List<LabelPrinterProfile> Profiles { get; set; } = new List<LabelPrinterProfile>();
         public List<LabelTemplate> Templates { get; set; } = new List<LabelTemplate>();
+        public List<LabelDesignElement> Design { get; set; }
+    }
+    public sealed class LabelDesignElement
+    {
+        public string Key { get; set; }
+        public bool Visible { get; set; } = true;
+        public decimal FontSize { get; set; } = 8;
+        public string Alignment { get; set; } = "center";
+        public bool Bold { get; set; }
+        public string Text { get; set; }
+    }
+    public class LabelDesignRequest
+    {
+        public long Version { get; set; }
+        public List<LabelDesignElement> Elements { get; set; }
+    }
+    public sealed class LabelDesignPreviewRequest : LabelDesignRequest
+    {
+        public LabelPrinterAssignment StockOverride { get; set; }
     }
     public sealed class LabelPrinterAssignment
     {
@@ -124,6 +144,7 @@ namespace AlKhayal.Application.Printing
     }
     public interface ILabelRepository
     {
+        Task<string> BusinessNameAsync(CancellationToken ct);
         Task<LabelSettings> ReadAsync(CancellationToken ct);
         Task<LabelSettings> SaveAsync(LabelSettings settings, long actorId, CancellationToken ct);
         Task<List<ProductLabel>> ProductsAsync(IReadOnlyList<LabelSelection> selected, CancellationToken ct);

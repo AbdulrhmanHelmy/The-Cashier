@@ -1,5 +1,7 @@
 # Testing and verification
 
+Cash change calculator scenarios run in `node frontend/tests/run-tests.js`. The Settings API integration test checks the default, an explicit disable, an older PUT that omits the field, and persistence after restart. Run `node frontend/tests/cash-change-browser.cjs` with Playwright Core and Edge to check the production frontend with fixture API responses. The browser test verifies card order and spacing in Arabic RTL, horizontal and stacked layouts, Light and Dark colors, and keyboard focus and dismissal. Set `THECASHIER_QA_SCREENSHOTS` to an existing directory to save captures.
+
 Supplier UI regression coverage in `frontend/tests/supplier-accounts-tests.js` exercises the single searchable selector, supplier switching and stale-response protection, authoritative statement and invoice loading, the existing invoice/on-account payment actions, and supplier navigation metadata. It does not create real financial records or visually qualify WebView2 geometry; manual acceptance remains required at 1366×768 in Light and Dark themes.
 
 `EstimatedProfitTests` covers persisted actual/estimated splits, purchase-cost selection across warehouses, configured fallback, unknown cost, repeated partial returns, cancellation, price-change immutability, and general/product profit reconciliation. Existing `SalesStockFloorTests` continues to check physical stock projection and legacy incomplete-cost behavior. See [sale cost and profit scope](estimated-sale-profit.md).
@@ -234,6 +236,8 @@ Resumed Net Profit acceptance on 2026-10-30 completed **296 integration + 137 un
 
 Use the isolated commands and actual results in [Phase 10.1](phase-10/phase-10-1-licensing.md). LicensingTests uses disposable RSA keys and fake hardware; ActivationDialogTests runs actual WinForms copy/paste, three-control, title-bar-close and 100–150% logical layout checks on an STA thread without WebView2; NodeLicenseCompatibilityTests issues through the JavaScript/SQLite manager and verifies/activates with .NET; LicenseAccessTests exercises the real signed-license/storage pipeline with localhost HTTP and a direct Web API host. Existing HTTP fixtures explicitly inject TestLicenseGate from the test assembly, never an environment bypass. Node tests also exercise authenticated loopback endpoints, hostile-origin rejection, append-only SQLite backup/restore, and the installed Desktop package with external network calls denied and process restart. Windows 7 and complete WebView2/installer acceptance remain separate deployment checks.
 
+Activation dialog coverage also checks the copy/paste-only instruction, LTR code fields, keyboard focus order, copy confirmation, invalid-code feedback, and repeat-click prevention while an async installer is pending. A disposable signed license exercises success feedback and the modal return. TrialDialogTests opens both native color palettes and checks the trial and support actions. The layout cases apply 100%, 125%, and 150% logical sizing to a 1366×768 budget. Windows display scaling and the production UAC prompt require a separate device check.
+
 ## Activation storage/UAC regression
 
 LicenseInstallationTests distinguishes actual medium-token Windows ACL/CreateNew denial, native path/rename/hard-link/junction and CLI rejection from simulated elevated targets/UAC results. ActivationDialogTests uses explicit fake installation ports to test preserved text and retry without raising real UAC. Full separate-standard-account credentialed elevation and Windows 7 remain UNVERIFIED; no real license is a fixture. [Actual results and manual acceptance](phase-10/activation-storage-hotfix.md).
@@ -408,6 +412,8 @@ The frontend registry and sidebar flyout regressions verify that all visible rep
 
 `frontend/tests/report-tests.js` checks movement links to the POS route, `touch-pos-invoice-tests.js` checks posted read-only controls and draft correction behavior, and `touch-pos-layout-tests.js` checks the five-column cart and bounded scrolling source contract. The stock report and invoice correction integration tests check the linked invoice ID and latest revision. Source-level layout tests do not measure browser geometry; 1024×768 and 1366×768 visual acceptance remains a deployment check.
 Barcode printer regression: `LabelPersistenceTests.Dedicated_assignment_persists_active_form_without_touching_receipt_and_direct_quantity_ignores_profile_copies` uses a fake XP-style active USER DEVMODE form at 78.7 × 101.6 mm, persists the label assignment through a new service instance, checks receipt settings remain separate, and verifies one direct label request reaches the backend with one application copy. `frontend/tests/label-tests.js` verifies the Product Directory direct request uses the saved barcode and exact quantity and blocks a second in-flight click. These tests do not submit a physical job; actual media alignment and scan quality require the one-label user check in `docs/product-barcode-label-printing.md`.
+
+Run the label designer regression with `node frontend/tests/run-tests.js`, the Release unit suite, and the Release integration suite filtered by `FullyQualifiedName~Labels_HTTP|FullyQualifiedName~LabelPersistenceTests`. The HTTP regression verifies the base label path followed by the customized 50×30 mm path. It sends requests with both an explicit preview template and the default template, decodes native preview and job captures for two saved products, compares the rendered pixels, and checks prices, exact quantities, printer identity, persistence across a new service instance, reset and unreadable-layout fallback. The capture runs before Windows spooling. Physical feed, margins and scanner reliability require the target printer and loaded stock.
 Printing designer regression coverage checks independent profile template selection after a SQLite reload, saved-document preview authorization and projection, bounded document search, native optional-field/column/order/typography rendering, and draft preview transport. The automated backend uses a recording printer; it does not verify physical XP-80C output or a real WebView2 display. Manually verify paper feed, Arabic glyphs, physical margins, printer offline behavior, and the 1366×768 Light/Dark modal before production acceptance.
 
 `frontend/tests/catalog-margin-tests.js` covers initial margin, both calculation directions, purchase-price changes, decimal rounding, and zero/missing cost in the shared Add/Edit product binding. Run it through `node frontend/tests/run-tests.js`.
@@ -434,3 +440,27 @@ The sales invoice list exposes **عرض PDF** on posted invoices. In a normal br
 The Cashier native trial contact test runs on an STA thread and asserts the Cashier caption, mirrored layout, contact numbers, and button targets. The modal timer closes the dialog in a finally block and rethrows callback failures on the test thread. Clipboard transfer is an isolated desktop acceptance check.
 
 StandaloneFirstRunApiTests serves the real Cashier login assets from a loopback API host, bootstraps a synthetic administrator into a fresh disposable SQLite database, creates an Arabic-named product, logs out, and checks the account and exact prices after recreating the host. Its test-only license gate applies only to the in-process fixture.
+
+## Stage 1 design system
+
+Run `node frontend/tests/design-system-tests.js` for theme tokens, defined contrast pairs and theme initialization. See [Stage 1 QA](design-system-stage1-qa.md) for the browser evidence, route coverage and remaining manual validation.
+
+## Stage 2 navigation
+
+Run `node frontend/tests/run-tests.js` for registry, redirect, sidebar, shortcuts, alert badge and tab regressions. The Edge runner at `frontend/tests/stage2-browser.cjs` exercises the repository frontend with synthetic API responses. See [Stage 2 QA](layout-navigation-stage2-qa.md) for reproduction commands, screenshots and the distinction between browser, API and native coverage.
+
+## Stage 3 product and barcode QA
+
+See [Stage 3 QA](catalog-stage3-qa.md) for the label tests and Edge screenshot runner. The browser uses a PNG from the native renderer and intercepts API traffic. The label HTTP test compares saved preview data to inputs captured by a recording printer backend. Driver and physical tests are reported separately.
+
+## Final POS, sales and delivery QA
+
+Run `node frontend/tests/final-sales-browser.cjs` for focused Edge regressions and add `--matrix` for visible route coverage in both themes. Run `node frontend/tests/run-tests.js` for the frontend suite and the Release integration filter `FullyQualifiedName~Delivery_` for disposable HTTP and SQLite tests. The live Edge runner `frontend/tests/final-delivery-live.cjs` takes a disposable QA host directory with its loopback URL and generated credential, checks for an empty database and uses real sale and delivery writes with printer dispatch intercepted. See [final module QA](final-stage-pos-sales-delivery-qa.md) and the [whole-application report](final-application-qa-report.md).
+
+Run `dotnet test tests/AlKhayal.IntegrationTests -c Release --no-restore --filter FullyQualifiedName~SalesInvoicePaginationTests` for disposable SQLite tests with 1,000 through 500,000 sales invoices and an authenticated loopback purchase history test. Run `node frontend/tests/run-tests.js` for mounted search, return badges, detail navigation, PDF actions, and export wiring.
+
+The authenticated sales pagination HTTP regression sends the actual initial query `search=&page=1&pageSize=50`, verifies a populated disposable database and global search, and checks invalid pagination. Web API can record a model-state error for an empty optional search, so pagination validation must inspect the pagination fields without rejecting that search.
+
+Phase 2 history coverage runs in `ReturnManagementTests`, `ExpensePersistenceTests`, `SalesInvoicePaginationTests`, and the frontend registry suite. The expense history test posts 201 vouchers to a disposable database, then checks that the final page returns the oldest voucher and the treasury balance still reflects all vouchers.
+
+Phase 3 coverage uses the customer directory and statement regression suite, the workforce persistence suite, authenticated loopback API coverage, and the frontend suite. The customer ledger fixture compares period totals and page-three running balances with the legacy statement. The payroll fixture reads the oldest month from 501 entries and checks that its paid status is available while viewing page one.

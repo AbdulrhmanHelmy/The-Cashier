@@ -15,6 +15,64 @@ namespace AlKhayal.IntegrationTests
     public sealed class CustomerStatementTests
     {
         [Fact]
+        public async Task Paged_ledger_matches_full_period_totals_and_running_balances()
+        {
+            using (var f = new TreasuryPersistenceTests.Fixture())
+            {
+                var customer = new CustomerService(new SqliteCustomerRepository(f.ConnectionString))
+                    .Create(new Customer { Name = "اختبار كشف الحساب", Phone = "010", Status = "نشط" });
+                using (var c = f.Open())
+                {
+                    c.Execute(@"WITH RECURSIVE Seed(N) AS (SELECT 1 UNION ALL SELECT N+1 FROM Seed WHERE N<10000)
+                        INSERT INTO CustomerTransactions(CustomerId,TransactionType,AmountScaled,OccurredOn,CreatedUtc)
+                        SELECT @Id, CASE WHEN N%2=0 THEN 'increase' ELSE 'reduction' END, N,
+                               CASE WHEN N<100 THEN '2026-01-01' ELSE '2026-01-02' END,'2026-01-02'
+                        FROM Seed", new { customer.Id });
+                }
+                var service = new CustomerAccountService(new SqliteCustomerAccountRepository(f.ConnectionString));
+                const string date = "2026-01-02";
+                var full = service.GetStatement(customer.Id, date, date);
+                var page = await service.GetStatementPageAsync(customer.Id, date, date, 3, 25, System.Threading.CancellationToken.None);
+                Assert.Equal(full.OpeningBalance, page.OpeningBalance);
+                Assert.Equal(full.CurrentBalance, page.CurrentBalance);
+                Assert.Equal(full.ClosingBalance, page.ClosingBalance);
+                Assert.Equal(full.TotalCredit, page.TotalCredit);
+                Assert.Equal(full.TotalDebit, page.TotalDebit);
+                Assert.Equal(full.Movements.Count - 1, page.TotalCount);
+                Assert.Equal(full.Movements.Skip(51).Take(25).Select(x => (x.TransactionId, x.Balance)),
+                    page.Movements.Select(x => (x.TransactionId, x.Balance)));
+            }
+        }
+
+        [Fact]
+        public async Task Directory_search_and_sort_cover_customers_outside_first_page()
+        {
+            using (var f = new TreasuryPersistenceTests.Fixture())
+            {
+                using (var c = f.Open())
+                {
+                    c.Execute(@"WITH RECURSIVE Seed(N) AS (SELECT 1 UNION ALL SELECT N+1 FROM Seed WHERE N<10000)
+                        INSERT INTO Customers(Code,Name,Phone,Address,Status,CreatedAt,UpdatedAt)
+                        SELECT printf('QA-%05d',N), 'عميل '||N, '010', CASE WHEN N=10000 THEN 'أَمَانَة % مميزة' ELSE '' END,
+                               'نشط','2026-01-01','2026-01-01' FROM Seed");
+                }
+                var service = new CustomerService(new SqliteCustomerRepository(f.ConnectionString));
+                var ct = System.Threading.CancellationToken.None;
+                var first = await service.ListPageAsync("", 1, 50, "code", false, ct);
+                var reverse = await service.ListPageAsync("", 1, 25, "code", true, ct);
+                var matches = await service.ListPageAsync("%", 1, 50, "name", false, ct);
+                var normalized = await service.ListPageAsync("امانه", 1, 50, "code", false, ct);
+                Assert.Equal("QA-10000", Assert.Single(normalized.Items).Code);
+                Assert.Equal(10000, first.TotalCount);
+                Assert.Equal(50, first.Items.Count);
+                Assert.Equal("QA-00001", first.Items[0].Code);
+                Assert.Equal("QA-10000", reverse.Items[0].Code);
+                Assert.Equal(1, matches.TotalCount);
+                Assert.Equal("QA-10000", Assert.Single(matches.Items).Code);
+            }
+        }
+
+        [Fact]
         public async Task Collections_reconcile_partial_full_destinations_replay_and_rollback()
         {
             using(var f=new TreasuryPersistenceTests.Fixture())

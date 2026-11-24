@@ -35,8 +35,20 @@ namespace AlKhayal.Application.Purchasing
         }
 
         public Task<PurchaseInvoice> GetAsync(long id, CancellationToken ct) { return _purchases.GetAsync(id, ct); }
+        public Task<IReadOnlyList<PurchaseInvoice>> SearchDirectoryAsync(string query, CancellationToken ct)
+        {
+            query = (query ?? "").Trim();
+            if (query.Length == 0 || query.Length > 120) throw new ArgumentException("أدخل عبارة بحث صالحة.");
+            return _purchases.SearchDirectoryAsync(query, ct);
+        }
         public Task<IReadOnlyList<PurchaseReturnLine>> ReturnableLinesAsync(long id, long warehouseId, CancellationToken ct) { return _purchases.ReturnableLinesAsync(id, warehouseId, ct); }
         public Task<IReadOnlyList<PurchaseReturn>> ReturnsAsync(long id, CancellationToken ct) { return _purchases.ReturnsAsync(id, ct); }
+        public Task<PurchaseInvoicePage> ListPageAsync(long page, CancellationToken ct)
+        {
+            if (page < 1) throw new ArgumentException("رقم الصفحة غير صالح.");
+            return _purchases.ListPageAsync(page, ct);
+        }
+
         public Task<IReadOnlyList<PurchaseInvoice>> ListAsync(long? supplierId, string from, string to, CancellationToken ct)
         {
             ValidateDate(from, false); ValidateDate(to, false);

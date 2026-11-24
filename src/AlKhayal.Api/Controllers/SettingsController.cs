@@ -181,6 +181,7 @@ namespace AlKhayal.Api.Controllers
     public sealed class UpdateGeneralSettingsRequest
     {
         public string LanguageCode { get; set; } public string DateFormat { get; set; } public string TimeFormat { get; set; } public bool UseGroupSeparators { get; set; } public string CurrencyCode { get; set; } public string CurrencySymbol { get; set; } public int DecimalPrecision { get; set; } public bool TaxEnabled { get; set; } public decimal DefaultTaxRate { get; set; } public bool PricesIncludeTax { get; set; }
-        public UpdateGeneralSettingsCommand ToCommand(long userId) { return new UpdateGeneralSettingsCommand { LanguageCode=LanguageCode, DateFormat=DateFormat, TimeFormat=TimeFormat, UseGroupSeparators=UseGroupSeparators, CurrencyCode=CurrencyCode, CurrencySymbol=CurrencySymbol, DecimalPrecision=DecimalPrecision, TaxEnabled=TaxEnabled, DefaultTaxRate=DefaultTaxRate, PricesIncludeTax=PricesIncludeTax, ChangedByUserId=userId }; }
+        public bool? ShowCashChangeCalculator { get; set; }
+        public UpdateGeneralSettingsCommand ToCommand(long userId) { return new UpdateGeneralSettingsCommand { LanguageCode=LanguageCode, DateFormat=DateFormat, TimeFormat=TimeFormat, UseGroupSeparators=UseGroupSeparators, CurrencyCode=CurrencyCode, CurrencySymbol=CurrencySymbol, DecimalPrecision=DecimalPrecision, TaxEnabled=TaxEnabled, DefaultTaxRate=DefaultTaxRate, PricesIncludeTax=PricesIncludeTax, ShowCashChangeCalculatorOverride=ShowCashChangeCalculator, ChangedByUserId=userId }; }
     }
 }

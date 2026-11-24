@@ -32,6 +32,29 @@ namespace AlKhayal.Api.Controllers
             catch (ArgumentException ex) { return BadRequestEnvelope(ex.Message); }
         }
 
+        [HttpGet, Route("page")]
+        public async Task<IHttpActionResult> Page(long page = 1, CancellationToken ct = default(CancellationToken))
+        {
+            var access = await Require(ct, false).ConfigureAwait(false);
+            if (access.Error != null) return access.Error;
+            if (!ModelState.IsValid) return BadRequestEnvelope("رقم الصفحة غير صالح.");
+            try { return Ok(ApiEnvelope<object>.Ok(await _purchases.ListPageAsync(page, ct).ConfigureAwait(false))); }
+            catch (ArgumentException ex) { return BadRequestEnvelope(ex.Message); }
+        }
+
+        [HttpGet, Route("directory-search")]
+        public async Task<IHttpActionResult> DirectorySearch(string query = "", CancellationToken ct = default(CancellationToken))
+        {
+            var access = await Require(ct, false).ConfigureAwait(false);
+            if (access.Error != null) return access.Error;
+            try
+            {
+                var items = await _purchases.SearchDirectoryAsync(query, ct).ConfigureAwait(false);
+                return Ok(ApiEnvelope<object>.Ok(items.Select(x => new { x.Id, x.InvoiceNumber, x.SupplierName })));
+            }
+            catch (ArgumentException ex) { return BadRequestEnvelope(ex.Message); }
+        }
+
         [HttpGet, Route("{id:long}")]
         public async Task<IHttpActionResult> Get(long id, CancellationToken ct)
         {

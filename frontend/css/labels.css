@@ -5,3 +5,48 @@
 .label-settings .form-grid,.label-settings .printing-designer{min-width:0;min-height:0}
 .label-settings table input[type=number]{min-width:70px}
 @media(max-width:760px){.label-product-results{grid-template-columns:minmax(0,1fr)}}
+.label-content-settings {
+  margin-block-start: 1.25rem;
+  padding-block-start: 1rem;
+  border-block-start: 1px solid var(--border);
+}
+.label-design-elements {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: .5rem;
+}
+.label-design-element {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  gap: .4rem;
+  padding: .65rem;
+  border: 1px solid var(--border);
+  border-radius: .5rem;
+}
+.label-design-element-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .4rem;
+}
+.label-design-element-head .printing-actions {
+  margin: 0;
+}
+.label-content-designer .printing-preview {
+  align-self: start;
+  position: sticky;
+  inset-block-start: 12px;
+  min-width: 0;
+  min-height: 0;
+}
+@media (max-width: 760px) {
+  .label-content-designer .printing-preview { position: static; grid-row: 1; }
+}
+.label-content-designer .printing-preview img {
+  max-width: 100%;
+  max-height: 65vh;
+  object-fit: contain;
+}

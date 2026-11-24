@@ -436,7 +436,7 @@
       "</tbody></table></div>"
     );
   }
-  function openRecordModal(entity, record, mode, afterSave) {
+  function openRecordModal(entity, record, mode, afterSave, fallbackFocus) {
     var schema = schemaFor(entity),
       fields = schema.fields || [];
     if (!fields.length || mode === "view") {
@@ -491,8 +491,10 @@
         (persistent ? "حفظ" : "حفظ مؤقت") +
         '</button><button class="button" type="button" data-modal-close>إلغاء</button>',
       compact: entity === "suppliers",
+      fallbackFocus: fallbackFocus,
+      focusSelector: entity === "customers" || entity === "suppliers" ? "#recordForm input" : null,
       onOpen: function (element) {
-        element.querySelector("input,select,textarea").focus();
+        if (entity !== "customers" && entity !== "suppliers") element.querySelector("input,select,textarea").focus();
       },
     });
     layer.querySelector("[data-save-record]").onclick = async function () {
@@ -542,21 +544,75 @@
   function openCustomerModal(afterSave) { openRecordModal("customers", null, "add", afterSave); }
   function supplierList(screen, container, context) {
     var state=context.state,schema=schemaFor("suppliers"),token=0;state.supplierQuery=state.supplierQuery||"";state.supplierPage=state.supplierPage||1;
-    function table(rows){if(!rows.length)return '<div class="empty-state"><strong>لا توجد نتائج مطابقة</strong><span>غيّر البحث أو أعد ضبطه.</span></div>';return '<div class="table-wrap supplier-list-wrap"><table class="data-table supplier-list-table"><thead><tr>'+schema.columns.map(function(column){return '<th>'+U.escape(column.label)+'</th>';}).join('')+'<th>الإجراءات</th></tr></thead><tbody>'+rows.map(function(row){return '<tr data-row-id="'+row.id+'">'+schema.columns.map(function(column){return '<td data-supplier-column="'+column.key+'">'+valueHtml(row,column)+'</td>';}).join('')+'<td><div class="row-actions supplier-row-actions"><button class="table-action supplier-statement-action" type="button" data-row-action="statement">كشف حساب</button><button class="table-action" type="button" data-row-action="view">عرض</button><button class="table-action" type="button" data-row-action="edit">تعديل</button><button class="table-action danger-text" type="button" data-row-action="delete">حذف</button></div></td></tr>';}).join('')+'</tbody></table></div>';}
+    function table(rows){
+      if(!rows.length)return state.supplierQuery.trim()
+        ? '<div class="empty-state"><strong>لا توجد نتائج مطابقة</strong><span>غيّر البحث أو أعد ضبطه.</span></div>'
+        : '<div class="empty-state"><strong>لا يوجد موردون</strong><span>يمكنك إضافة مورد من قائمة الموردين.</span></div>';return '<div class="table-wrap supplier-list-wrap"><table class="data-table supplier-list-table"><thead><tr>'+schema.columns.map(function(column){return '<th>'+U.escape(column.label)+'</th>';}).join('')+'<th>الإجراءات</th></tr></thead><tbody>'+rows.map(function(row){return '<tr data-row-id="'+row.id+'">'+schema.columns.map(function(column){return '<td data-supplier-column="'+column.key+'">'+valueHtml(row,column)+'</td>';}).join('')+'<td><div class="row-actions supplier-row-actions"><button class="table-action supplier-statement-action" type="button" data-row-action="statement">كشف حساب</button><button class="table-action" type="button" data-row-action="view">عرض</button><button class="table-action" type="button" data-row-action="edit">تعديل</button><button class="table-action danger-text" type="button" data-row-action="delete">حذف</button></div></td></tr>';}).join('')+'</tbody></table></div>';}
     container.innerHTML=UI.pageHeader(screen,'<button class="button primary" data-supplier-add>+ إضافة مورد</button><button class="button" data-supplier-export>تصدير</button>')+'<div class="toolbar supplier-list-toolbar"><div class="field grow"><label for="supplierSearch">بحث</label><input class="input" id="supplierSearch" value="'+U.escape(state.supplierQuery)+'" placeholder="اسم المورد أو الكود أو الهاتف"></div><span class="muted" data-supplier-count></span></div><div data-supplier-results aria-live="polite"></div>';
     var search=container.querySelector("#supplierSearch"),host=container.querySelector("[data-supplier-results]"),count=container.querySelector("[data-supplier-count]");
     function load(){var requestToken=++token;host.innerHTML='<div class="card"><div class="card-body">جارٍ تحميل الموردين...</div></div>';AlKhayalApi.request("/api/suppliers?search="+encodeURIComponent(state.supplierQuery)+"&page="+state.supplierPage+"&pageSize=25").then(function(data){if(requestToken!==token)return;var rows=data.items||[],pages=Math.max(1,Math.ceil((data.totalCount||0)/(data.pageSize||25)));if(data.page>pages){state.supplierPage=pages;load();return;}S.store.replace("suppliers",rows);count.textContent=U.number(data.totalCount||0)+" سجل";host.innerHTML=table(rows)+'<div class="pagination"><span>صفحة '+data.page+' من '+pages+'</span><div class="pagination-buttons"><button class="button" data-supplier-page="prev"'+(data.page<=1?' disabled':'')+'>السابق</button><button class="button" data-supplier-page="next"'+(data.page>=pages?' disabled':'')+'>التالي</button></div></div>';}).catch(function(error){if(requestToken===token)host.innerHTML='<div class="empty-state"><strong>تعذر تحميل الموردين</strong><span>'+U.escape(error.message||"")+'</span><button class="button" data-supplier-retry>إعادة المحاولة</button></div>';});}
     var scheduleSearch=U.debounce(function(){load();},180);search.oninput=function(){state.supplierQuery=search.value;state.supplierPage=1;token++;scheduleSearch();};
     container.querySelector("[data-supplier-export]").onclick=function(){global.AlKhayalExports.choose({dataset:"suppliers",arabicName:"الموردين",fileName:"الموردون",filters:function(){return {search:search.value};}},this);};
-    container.onclick=async function(event){var page=event.target.closest("[data-supplier-page]"),action=event.target.closest("[data-row-action]");if(event.target.closest("[data-supplier-retry]")){load();return;}if(event.target.closest("[data-supplier-add]")){openRecordModal("suppliers",null,"add",load);return;}if(page){state.supplierPage+=page.getAttribute("data-supplier-page")==="next"?1:-1;load();return;}if(!action)return;var row=S.store.find("suppliers",action.closest("tr").getAttribute("data-row-id")),operation=action.getAttribute("data-row-action");if(operation==="statement"){context.navigate("supplier-payment",{supplierId:Number(row.id)});return;}if(operation==="view")openRecordModal("suppliers",row,"view");else if(operation==="edit")openRecordModal("suppliers",row,"edit",load);else if(operation==="delete"&&await UI.confirm({title:"حذف مورد",message:"سيتم حذف المورد نهائيًا من قاعدة البيانات.",confirmText:"حذف",danger:true})){try{await AlKhayalApi.request("/api/suppliers/"+encodeURIComponent(row.id),{method:"DELETE"});UI.toast("تم حذف المورد من قاعدة البيانات.","success");load();}catch(error){UI.toast(error.message||"تعذر حذف المورد.","danger");}}};
+    container.onclick=async function(event){var page=event.target.closest("[data-supplier-page]"),action=event.target.closest("[data-row-action]");if(event.target.closest("[data-supplier-retry]")){load();return;}if(event.target.closest("[data-supplier-add]")){openRecordModal("suppliers",null,"add",load);return;}if(page){state.supplierPage+=page.getAttribute("data-supplier-page")==="next"?1:-1;load();return;}if(!action)return;var row=S.store.find("suppliers",action.closest("tr").getAttribute("data-row-id")),operation=action.getAttribute("data-row-action");if(operation==="statement"){context.navigate("supplier-payment",{supplierId:Number(row.id)});return;}if(operation==="view")openRecordModal("suppliers",row,"view");else if(operation==="edit")openRecordModal("suppliers",row,"edit",load,function(){
+      if (!container.isConnected) return null;
+      return container.querySelector('[data-row-id="'+Number(row.id)+'"] [data-row-action="edit"]') || search;
+    });else if(operation==="delete"&&await UI.confirm({title:"حذف مورد",message:"سيتم حذف المورد «"+row.name+"» ("+row.code+") نهائيًا من قاعدة البيانات.",confirmText:"حذف",danger:true})){try{await AlKhayalApi.request("/api/suppliers/"+encodeURIComponent(row.id),{method:"DELETE"});UI.toast("تم حذف المورد من قاعدة البيانات.","success");load();}catch(error){UI.toast(error.message||"تعذر حذف المورد.","danger");}}};
     load();
+  }
+  function directoryRecord(screen, container, context, entity) {
+    var id = context.state.globalSearchContactId;
+    var current = context.isCurrent || context.isActive;
+    show('<p role="status">جارٍ تحميل السجل…</p>');
+    AlKhayalApi.request("/api/" + entity + "/directory-record/" + id).then(function (record) {
+      if (!current()) return;
+      if (!record || record.id !== id) throw new Error("Record unavailable");
+      show('<h2>' + U.escape(record.name) + '</h2><p><bdi>' + U.escape(record.code || "") +
+        '</bdi></p><p><bdi>' + U.escape(record.phone || "") + '</bdi></p>');
+    }).catch(function () {
+      if (current()) show('<p role="alert">لا يمكن فتح هذا السجل</p>');
+    });
+    function show(body) {
+      container.innerHTML = UI.pageHeader(screen) + '<section class="card"><div class="card-body">' + body +
+        '<button class="button" type="button" data-directory-back>العودة إلى الدليل</button></div></section>';
+      container.querySelector("[data-directory-back]").onclick = function () { context.navigate(screen.route, {}); };
+    }
   }
   function entityList(screen, container, context, dataLoaded) {
     var entity = screen.data,
       schema = schemaFor(entity),
       state = context.state,
-      info = persistedInfo(entity);
+      info = persistedInfo(entity),
+      customerDirectory = entity === "customers";
+    if ((entity === "customers" || entity === "suppliers") && state.globalSearchContactId) {
+      directoryRecord(screen, container, context, entity); return;
+    }
     if(entity==="suppliers"){supplierList(screen,container,context);return;}
+    if (customerDirectory && !dataLoaded) {
+      var request = (state.customerDirectoryRequest || 0) + 1;
+      state.customerDirectoryRequest = request;
+      var host = container.querySelector("[data-table-host]");
+      if (!host) {
+        container.innerHTML = UI.pageHeader(screen) + '<div class="empty-state" role="status">جارٍ تحميل العملاء…</div>';
+      } else {
+        host.innerHTML = '<div class="empty-state" role="status">جارٍ تحميل العملاء…</div>';
+        container.querySelector("[data-list-pagination]").innerHTML = "";
+      }
+      var size = [25, 50, 100, 200].indexOf(state.pageSize) < 0 ? 50 : state.pageSize;
+      var url = "/api/customers/page?search=" + encodeURIComponent(state.query || "") + "&page=" + (state.page || 1) +
+        "&pageSize=" + size + "&sort=" + encodeURIComponent(state.sortKey || "code") + "&descending=" + (state.sortDirection === "desc");
+      AlKhayalApi.request(url).then(function (result) {
+        if (!context.isActive() || request !== state.customerDirectoryRequest) return;
+        state.page = result.page;
+        state.pageSize = result.pageSize;
+        entityList(screen, container, context, result);
+      }).catch(function (error) {
+        if (!context.isActive() || request !== state.customerDirectoryRequest) return;
+        (host || container).innerHTML = '<div class="empty-state" role="alert">' + U.escape(error.message) +
+          ' <button class="button" data-retry-customers>إعادة المحاولة</button></div>';
+        container.querySelector("[data-retry-customers]").onclick = function () { entityList(screen, container, context, false); };
+      });
+      return;
+    }
     if (info && !dataLoaded) {
       container.innerHTML =
         UI.pageHeader(screen) +
@@ -567,7 +623,7 @@
         .then(function (rows) {
           if (!context.isActive()) return;
           S.store.replace(entity, rows);
-          entityList(screen, container, context, true);
+          entityList(screen, container, context, !customerDirectory);
         })
         .catch(function (error) {
           if (!context.isActive()) return;
@@ -606,16 +662,21 @@
         });
       return allRows;
     }
-    var allRows = queryRows();
-    var pages = Math.max(1, Math.ceil(allRows.length / state.pageSize));
+    var allRows = customerDirectory ? dataLoaded.items : queryRows();
+    var totalRows = customerDirectory ? dataLoaded.totalCount : allRows.length;
+    var pages = Math.max(1, Math.ceil(totalRows / state.pageSize));
     state.page = Math.min(state.page, pages);
-    var rows = allRows.slice(
+    var rows = customerDirectory ? allRows : allRows.slice(
         (state.page - 1) * state.pageSize,
         state.page * state.pageSize,
       ),
       canAdd = !!schema.fields;
-    var tableHtml = rowsTable(schema.columns, rows, true),
-      countText = U.number(allRows.length) + " سجل",
+    var tableHtml = entity === "customers" && !rows.length
+        ? (state.query.trim()
+          ? '<div class="empty-state"><strong>لا توجد نتائج مطابقة</strong><span>غيّر عبارة البحث أو امسحها.</span></div>'
+          : '<div class="empty-state"><strong>لا يوجد عملاء</strong><span>يمكنك إضافة عميل من هذه الصفحة.</span></div>')
+        : rowsTable(schema.columns, rows, true),
+      countText = U.number(totalRows) + " سجل",
       paginationInner =
         "<span>صفحة " +
         state.page +
@@ -659,14 +720,27 @@
         paginationInner +
         "</div>";
       var search = container.querySelector("#listSearch");
-      search.addEventListener(
-        "input",
-        U.debounce(function () {
-          state.query = search.value;
-          state.page = 1;
-          entityList(screen, container, context, true);
-        }, 180),
-      );
+      var searchLater = U.debounce(function () {
+        if (context.isActive()) entityList(screen, container, context, !customerDirectory);
+      }, 180);
+      search.addEventListener("input", function () {
+        state.query = search.value;
+        state.page = 1;
+        if (customerDirectory) state.customerDirectoryRequest++;
+        searchLater();
+      });
+    }
+    if (customerDirectory) {
+      var chooser = container.querySelector("[data-list-pagination]");
+      chooser.innerHTML += '<label>عدد العملاء في الصفحة <select class="select" data-customer-page-size>' +
+        [25, 50, 100, 200].map(function (size) { return '<option value="' + size + '"' + (size === state.pageSize ? ' selected' : '') + '>' + size + '</option>'; }).join("") +
+        "</select></label>";
+      chooser.onchange = function (event) {
+        if (!event.target.matches("[data-customer-page-size]")) return;
+        state.pageSize = Number(event.target.value);
+        state.page = 1;
+        entityList(screen, container, context, false);
+      };
     }
     container.onclick = async function (event) {
       var sort = event.target.closest("[data-sort]"),
@@ -681,12 +755,13 @@
             ? "desc"
             : "asc";
         state.sortKey = key;
-        entityList(screen, container, context, true);
+        if (customerDirectory) state.page = 1;
+        entityList(screen, container, context, !customerDirectory);
         return;
       }
-      if (page) {
+      if (page && !page.disabled) {
         state.page += page.getAttribute("data-page") === "next" ? 1 : -1;
-        entityList(screen, container, context, true);
+        entityList(screen, container, context, !customerDirectory);
         return;
       }
       if (event.target.closest("[data-list-add]")) {
@@ -708,10 +783,8 @@
         return;
       }
       if (action) {
-        var row = S.store.find(
-            entity,
-            action.closest("tr").getAttribute("data-row-id"),
-          ),
+        var id = action.closest("tr").getAttribute("data-row-id");
+        var row = customerDirectory ? rows.find(function (item) { return Number(item.id) === Number(id); }) : S.store.find(entity, id),
           operation = action.getAttribute("data-row-action");
         if (operation === "view") openRecordModal(entity, row, "view");
         else if (operation === "edit")
@@ -724,9 +797,11 @@
             title: info
               ? "حذف " + info.singular.replace(/^ال/, "")
               : "حذف سجل تجريبي",
-            message: info
-              ? "سيتم حذف " + info.singular + " نهائيًا من قاعدة البيانات."
-              : "سيُحذف هذا السجل من جلسة العرض الحالية فقط.",
+            message: entity === "customers"
+              ? "سيتم حذف العميل " + row.name + " (" + row.code + ") نهائيًا من قاعدة البيانات."
+              : info
+                ? "سيتم حذف " + info.singular + " نهائيًا من قاعدة البيانات."
+                : "سيُحذف هذا السجل من جلسة العرض الحالية فقط.",
             confirmText: "حذف",
             danger: true,
           }))
@@ -762,7 +837,7 @@
       schema = schemaFor(entity),
       fields = (schema.fields || []).slice(),
       record = screen.mode === "edit" ? S.store.all(entity)[0] : {};
-    if (entity === "customers" && !dataLoaded) {
+    if (entity === "customers" && screen.mode === "edit" && !dataLoaded) {
       container.innerHTML =
         UI.pageHeader(screen) +
         '<section class="card"><div class="card-body">جارٍ تحميل بيانات العملاء...</div></section>';
@@ -861,10 +936,7 @@
             },
           );
           UI.toast("تم حفظ بيانات العميل في قاعدة البيانات." + (screen.mode !== "edit" && savedCustomer && savedCustomer.code ? " الكود: " + savedCustomer.code : ""), "success");
-          S.store.replace(
-            "customers",
-            await AlKhayalApi.request("/api/customers"),
-          );
+          if (screen.mode === "edit") record = savedCustomer || record;
           if (screen.mode !== "edit") form.reset();
         } else {
           if (screen.mode === "edit")
@@ -1055,17 +1127,17 @@
     };
   }
   function customerStatement(screen, container, context) {
-    var state=context&&context.state||{},customers=[],seq=0,currentBalance=0;
+    var state=context&&context.state||{},customers=[],seq=0,currentBalance=0,dialogRequest=0;
     state.customerStatementFrom=state.customerStatementFrom||"";state.customerStatementTo=state.customerStatementTo||"";
     function active(){return !context||!context.isActive||context.isActive();}
     function localDate(){var now=new Date();return now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0");}
     function controls(ready){container.querySelector("[data-customer-increase]").disabled=!ready;container.querySelector("[data-customer-collect]").disabled=!ready||currentBalance<=0;}
-    function shell(){
-      container.innerHTML=UI.pageHeader(screen)+'<section class="card customer-statement-filters"><div class="card-body form-grid"><div class="field customer-statement-customer"><label for="statementCustomer">العميل</label><select class="select" id="statementCustomer">'+customers.map(function(customer){return '<option value="'+customer.id+'"'+(Number(customer.id)===Number(state.customerStatementId)?' selected':'')+'>'+U.escape(customer.name+(customer.code?' — '+customer.code:''))+'</option>';}).join("")+'</select></div><div class="field"><label for="statementFrom">من تاريخ</label><input class="input" type="date" id="statementFrom" value="'+U.escape(state.customerStatementFrom)+'"></div><div class="field"><label for="statementTo">إلى تاريخ</label><input class="input" type="date" id="statementTo" value="'+U.escape(state.customerStatementTo)+'"></div><div class="page-actions customer-statement-actions"><button class="button" id="statementReset">كل الفترات</button><button class="button primary" data-customer-collect disabled>تحصيل من العميل</button><button class="button customer-debt-action" data-customer-increase disabled>+ إضافة مديونية</button></div><p class="field-error span-2" id="statementError" role="alert" hidden></p></div></section><div id="statementBody" class="customer-statement-body" aria-live="polite"></div>';
-      container.querySelector("#statementCustomer").onchange=function(){state.customerStatementId=Number(this.value);load();};
-      function dates(){var from=container.querySelector("#statementFrom").value,to=container.querySelector("#statementTo").value,error=container.querySelector("#statementError");error.hidden=true;if(from&&to&&from>to){error.hidden=false;error.textContent="تاريخ البداية يجب ألا يكون بعد تاريخ النهاية.";return;}state.customerStatementFrom=from;state.customerStatementTo=to;load();}
+    function shell(customerUnavailable){
+      container.innerHTML=UI.pageHeader(screen)+'<section class="card customer-statement-filters"><div class="card-body form-grid"><div class="field customer-statement-customer"><label for="statementCustomer">العميل</label><select class="select" id="statementCustomer">'+(customerUnavailable?'<option value="" disabled selected>اختر العميل</option>':'')+customers.map(function(customer){return '<option value="'+customer.id+'"'+(Number(customer.id)===Number(state.customerStatementId)?' selected':'')+'>'+U.escape(customer.name+(customer.code?' — '+customer.code:''))+'</option>';}).join("")+'</select></div><div class="field"><label for="statementFrom">من تاريخ</label><input class="input" type="date" id="statementFrom" value="'+U.escape(state.customerStatementFrom)+'"></div><div class="field"><label for="statementTo">إلى تاريخ</label><input class="input" type="date" id="statementTo" value="'+U.escape(state.customerStatementTo)+'"></div><div class="page-actions customer-statement-actions"><button class="button" id="statementReset">كل الفترات</button><button class="button primary" data-customer-collect disabled>تحصيل من العميل</button><button class="button customer-debt-action" data-customer-increase disabled>+ إضافة مديونية</button></div><p class="field-error span-2" id="statementError" role="alert" hidden></p></div></section><div id="statementBody" class="customer-statement-body" aria-live="polite"></div>';
+      container.querySelector("#statementCustomer").onchange=function(){state.customerStatementId=Number(this.value);state.customerStatementPage=1;load();};
+      function dates(){var from=container.querySelector("#statementFrom").value,to=container.querySelector("#statementTo").value,error=container.querySelector("#statementError");error.hidden=true;if(from&&to&&from>to){error.hidden=false;error.textContent="تاريخ البداية يجب ألا يكون بعد تاريخ النهاية.";return;}state.customerStatementFrom=from;state.customerStatementTo=to;state.customerStatementPage=1;load();}
       container.querySelector("#statementFrom").onchange=dates;container.querySelector("#statementTo").onchange=dates;
-      container.querySelector("#statementReset").onclick=function(){state.customerStatementFrom=state.customerStatementTo="";container.querySelector("#statementError").hidden=true;container.querySelector("#statementFrom").value="";container.querySelector("#statementTo").value="";load();};
+      container.querySelector("#statementReset").onclick=function(){state.customerStatementFrom=state.customerStatementTo="";container.querySelector("#statementError").hidden=true;container.querySelector("#statementFrom").value="";container.querySelector("#statementTo").value="";state.customerStatementPage=1;load();};
       container.querySelector("[data-customer-collect]").onclick=function(){operation("collection");};
       container.querySelector("[data-customer-increase]").onclick=function(){operation("increase");};
     }
@@ -1074,20 +1146,33 @@
       var movements=data.movements||[];
       container.querySelector("#statementBody").innerHTML='<div class="stats-grid customer-statement-summary">'+[
         ["المديونية الحالية على العميل",data.currentBalance],["رصيد بداية الفترة",data.openingBalance],["مديونيات خلال الفترة",data.totalDebit],["تحصيلات وتخفيضات خلال الفترة",data.totalCredit],["رصيد نهاية الفترة",data.closingBalance]
-      ].map(function(item,index){return '<article class="card stat-card customer-statement-stat'+(index===0?' customer-current-balance':'')+'"><span class="stat-label">'+item[0]+'</span><strong class="stat-value">'+U.money(item[1])+'</strong></article>';}).join("")+'</div><section class="card customer-statement-ledger"><div class="card-head"><h2>حركات حساب '+U.escape(data.customerName)+'</h2></div><div class="card-body"><div class="table-wrap customer-statement-table-wrap"><table class="data-table customer-statement-table"><thead><tr><th>التاريخ</th><th>المرجع</th><th>البيان</th><th>الملاحظات</th><th>زيادة المديونية</th><th>تحصيل / تخفيض</th><th>الرصيد</th><th>طباعة</th></tr></thead><tbody>'+movements.map(function(item){return '<tr><td>'+U.date(item.date)+'</td><td>'+U.escape(item.reference||"—")+'</td><td>'+U.escape(item.description)+'</td><td>'+U.escape(item.notes||"—")+'</td><td>'+U.money(item.debit)+'</td><td>'+U.money(item.credit)+'</td><td>'+U.money(item.balance)+'</td><td>'+((item.transactionId&&(item.kind==="collection"||item.kind==="legacy_payment"))?'<button class="button customer-receipt-action" data-customer-receipt="'+item.transactionId+'">طباعة السند</button>':'')+'</td></tr>';}).join("")+'</tbody></table></div>'+(movements.length<=1?'<p class="muted">لا توجد حركات خلال الفترة المحددة.</p>':'')+'</div></section>';
-      container.querySelector("#statementBody").onclick=function(event){var button=event.target.closest("[data-customer-receipt]");if(button&&global.AlKhayalPrinting)global.AlKhayalPrinting.submit("customer-payment",Number(button.getAttribute("data-customer-receipt")),false,button);};
+      ].map(function(item,index){return '<article class="card stat-card customer-statement-stat'+(index===0?' customer-current-balance':'')+'"><span class="stat-label">'+item[0]+'</span><strong class="stat-value">'+U.money(item[1])+'</strong></article>';}).join("")+'</div><section class="card customer-statement-ledger"><div class="card-head"><h2>حركات حساب '+U.escape(data.customerName)+'</h2></div><div class="card-body"><div class="table-wrap customer-statement-table-wrap"><table class="data-table customer-statement-table"><thead><tr><th>التاريخ</th><th>المرجع</th><th>البيان</th><th>الملاحظات</th><th>زيادة المديونية</th><th>تحصيل / تخفيض</th><th>الرصيد</th><th>طباعة</th></tr></thead><tbody>'+movements.map(function(item){return '<tr><td>'+U.date(item.date)+'</td><td>'+U.escape(item.reference||"—")+'</td><td>'+U.escape(item.description)+'</td><td>'+U.escape(item.notes||"—")+'</td><td>'+U.money(item.debit)+'</td><td>'+U.money(item.credit)+'</td><td>'+U.money(item.balance)+'</td><td>'+((item.transactionId&&(item.kind==="collection"||item.kind==="legacy_payment"))?'<button class="button customer-receipt-action" data-customer-receipt="'+item.transactionId+'">طباعة السند</button>':'')+'</td></tr>';}).join("")+'</tbody></table></div>'+(data.totalCount===0?'<p class="muted">لا توجد حركات خلال الفترة المحددة.</p>':'')+'</div></section>';
+      if (data.page) {
+        var page=state.customerStatementPage=data.page,last=Math.max(1,Math.ceil(data.totalCount/data.pageSize));
+        container.querySelector("#statementBody").innerHTML+='<nav class="pagination invoice-pagination" aria-label="صفحات كشف الحساب"><span>صفحة '+page+' من '+last+' · '+data.totalCount+' حركة</span><div class="pagination-buttons"><button class="button" type="button" data-statement-page="'+(page-1)+'"'+(page===1?' disabled':'')+'>السابق</button><button class="button" type="button" data-statement-page="'+(page+1)+'"'+(page===last?' disabled':'')+'>التالي</button></div></nav>';
+      }
+      container.querySelector("#statementBody").onclick=function(event){var targetPage=event.target.closest("[data-statement-page]");if(targetPage&&!targetPage.disabled){state.customerStatementPage=Number(targetPage.getAttribute("data-statement-page"));load();return;}var button=event.target.closest("[data-customer-receipt]");if(button&&global.AlKhayalPrinting)global.AlKhayalPrinting.submit("customer-payment",Number(button.getAttribute("data-customer-receipt")),false,button);};
     }
     function load(){
       if(!active())return;var token=++seq,customerId=Number(state.customerStatementId);controls(false);
-      var query=[];if(state.customerStatementFrom)query.push("from="+encodeURIComponent(state.customerStatementFrom));if(state.customerStatementTo)query.push("to="+encodeURIComponent(state.customerStatementTo));
-      var target=container.querySelector("#statementBody");target.innerHTML='<div class="card card-body">جارٍ تحميل كشف الحساب من قاعدة البيانات...</div>';
+      var target=container.querySelector("#statementBody");
+      if(!customers.some(function(customer){return Number(customer.id)===customerId;})){
+        target.innerHTML='<div class="card empty-state">العميل المطلوب غير متاح. اختر عميلًا لعرض كشف حسابه.</div>';
+        return;
+      }
+      var query=["page="+(state.customerStatementPage||1)];if(state.customerStatementFrom)query.push("from="+encodeURIComponent(state.customerStatementFrom));if(state.customerStatementTo)query.push("to="+encodeURIComponent(state.customerStatementTo));
+      target.onclick=null;
+      target.innerHTML='<div class="card card-body">جارٍ تحميل كشف الحساب من قاعدة البيانات...</div>';
       AlKhayalApi.request("/api/customers/"+customerId+"/statement"+(query.length?'?'+query.join('&'):'')).then(function(data){if(token===seq&&active()&&customerId===Number(state.customerStatementId))draw(data);}).catch(function(error){if(token!==seq||!active()||customerId!==Number(state.customerStatementId))return;target.innerHTML='<div class="card empty-state"><span>'+U.escape(error.message||"تعذر تحميل كشف الحساب.")+'</span><button class="button" data-statement-retry>إعادة المحاولة</button></div>';target.querySelector("[data-statement-retry]").onclick=load;});
     }
     async function operation(type){
       var customer=customers.find(function(item){return Number(item.id)===Number(state.customerStatementId);});if(!customer)return;
+      var request=++dialogRequest,statementVersion=seq;
+      function canOpen(){return active()&&request===dialogRequest&&statementVersion===seq&&Number(customer.id)===Number(state.customerStatementId);}
       var label=type==="increase"?"إضافة مديونية":"تحصيل من العميل",busy=false,uncertain=false;
       var operationKey="customer-account-"+customer.id+"-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,14);
-      var accounts=[];if(type==="collection")try{accounts=await AlKhayalApi.request("/api/treasury/accounts");}catch(error){UI.toast(error.message||"تعذر تحميل الخزن والبنوك.","danger");return;}
+      var accounts=[];if(type==="collection")try{accounts=await AlKhayalApi.request("/api/treasury/accounts");}catch(error){if(canOpen())UI.toast(error.message||"تعذر تحميل الخزن والبنوك.","danger");return;}
+      if(!canOpen())return;
       UI.modal({title:label+" — "+customer.name,compact:true,focusSelector:"#customerAccountAmount",beforeClose:function(){return !busy&&!uncertain;},
         body:'<p class="muted">المديونية الحالية: '+U.money(currentBalance)+'</p><form id="customerAccountForm" class="form-grid"><div class="field"><label for="customerAccountAmount">المبلغ</label><input class="input ltr" id="customerAccountAmount" inputmode="decimal" required maxlength="20"></div><div class="field"><label for="customerAccountDate">تاريخ العملية</label><input class="input" type="date" id="customerAccountDate" required value="'+localDate()+'"></div>'+(type==="collection"?'<div class="field"><label for="customerCollectionMethod">طريقة التحصيل</label><select class="select" id="customerCollectionMethod"><option value="cash">نقدي</option><option value="card">بطاقة</option><option value="transfer">تحويل</option><option value="wallet">محفظة</option></select></div><div class="field"><label for="customerCollectionAccount">إيداع في</label><select class="select" id="customerCollectionAccount" required><option value="">اختر الحساب</option>'+accounts.filter(function(a){return a.type==="cash";}).map(function(a){return '<option value="'+a.id+'">'+U.escape(a.name)+'</option>';}).join("")+'</select></div>':'')+'<div class="field span-2"><label for="customerAccountNotes">البيان / ملاحظات</label><textarea class="textarea" id="customerAccountNotes" maxlength="1000"></textarea></div><p class="field-error span-2" data-account-error role="alert" hidden></p></form>',
         actions:'<button class="button primary" type="submit" form="customerAccountForm" data-save-customer-account>حفظ '+label+'</button><button class="button" data-modal-close>إلغاء</button>',
@@ -1109,7 +1194,7 @@
     }
     function init(){
       container.innerHTML=UI.pageHeader(screen)+'<div class="card card-body">جارٍ تحميل العملاء...</div>';
-      AlKhayalApi.request("/api/customers").then(function(rows){if(!active())return;customers=rows;if(!customers.length){container.innerHTML=UI.pageHeader(screen)+'<div class="card empty-state">لا يوجد عملاء. أضف عميلًا من قائمة العملاء أولًا.</div>';return;}if(!customers.some(function(customer){return Number(customer.id)===Number(state.customerStatementId);}))state.customerStatementId=Number(customers[0].id);shell();load();}).catch(function(error){if(!active())return;container.innerHTML=UI.pageHeader(screen)+'<div class="card empty-state"><span>'+U.escape(error.message)+'</span><button class="button" data-customers-retry>إعادة المحاولة</button></div>';container.querySelector("[data-customers-retry]").onclick=init;});
+      AlKhayalApi.request("/api/customers").then(function(rows){if(!active())return;customers=rows;if(!customers.length){container.innerHTML=UI.pageHeader(screen)+'<div class="card empty-state">لا يوجد عملاء. أضف عميلًا من قائمة العملاء أولًا.</div>';return;}if(state.customerStatementId==null)state.customerStatementId=Number(customers[0].id);shell(!customers.some(function(customer){return Number(customer.id)===Number(state.customerStatementId);}));load();}).catch(function(error){if(!active())return;container.innerHTML=UI.pageHeader(screen)+'<div class="card empty-state"><span>'+U.escape(error.message)+'</span><button class="button" data-customers-retry>إعادة المحاولة</button></div>';container.querySelector("[data-customers-retry]").onclick=init;});
     }
     init();
   }
@@ -1615,8 +1700,9 @@
     state.accountsSearch = state.accountsSearch || "";
     state.selectedSupplierId = state.supplierId || state.selectedSupplierId || null;
     state.accountFrom = state.accountFrom || ""; state.accountTo = state.accountTo || ""; state.accountType = state.accountType || "all";
-    container.innerHTML = UI.pageHeader(screen) + '<section class="card"><div class="card-body"><div class="field"><label for="supplierAccountsSearch">بحث عن مورد بالاسم أو الكود أو الهاتف</label><input class="input" type="search" id="supplierAccountsSearch" value="'+U.escape(state.accountsSearch)+'"></div></div></section><div id="supplierAccountsResults" aria-live="polite"></div>';
+    container.innerHTML = UI.pageHeader(screen) + '<section class="card"><div class="card-body"><div class="field"><label for="supplierAccountsSearch">بحث عن مورد بالاسم أو الكود أو الهاتف</label><input class="input" type="search" id="supplierAccountsSearch" value="'+U.escape(state.accountsSearch)+'"></div></div></section><p class="field-error" data-supplier-selection-error role="alert" hidden></p><div id="supplierAccountsResults" aria-live="polite"></div>';
     var search = container.querySelector("#supplierAccountsSearch"), results = container.querySelector("#supplierAccountsResults");
+    var selectionError = container.querySelector("[data-supplier-selection-error]");
     var delayed = U.debounce(load,180);
     search.oninput = function () { ++seq; state.accountsSearch=search.value;state.accountsPage=1;delayed(); };
     function invoiceKey(invoice) { return (invoice.invoiceType === "purchase" ? "purchase:" : "legacy:")+invoice.id; }
@@ -1638,6 +1724,10 @@
         var query=[];if(state.accountFrom)query.push("from="+encodeURIComponent(state.accountFrom));if(state.accountTo)query.push("to="+encodeURIComponent(state.accountTo));
         var loaded=await Promise.all([AlKhayalApi.request("/api/suppliers/"+supplier.id+"/statement"+(query.length?"?"+query.join("&"):"")),AlKhayalApi.request("/api/suppliers/"+supplier.id+"/invoices")]),statement=loaded[0],invoices=loaded[1];
         if(token!==seq||!active())return;
+        var account = results.querySelector('[data-supplier-account="'+supplier.id+'"]');
+        if (!account) return;
+        account.querySelector("[data-add-account-invoice]").disabled = false;
+        account.querySelector("[data-pay-supplier-account]").disabled = !(Number(supplier.payable) > 0);
         statementCache[supplier.id]=statement;invoiceCache[supplier.id]=invoices;var target=host(supplier.id);if(target)target.innerHTML='<div class="stats-grid supplier-account-summary"><article class="card stat-card supplier-balance-card"><span class="stat-label">المستحق الحالي</span><strong class="stat-value">'+U.money(supplier.payable||0)+'</strong></article><article class="card stat-card"><span class="stat-label">إجمالي الفواتير</span><strong class="stat-value">'+(statement.totalInvoices==null?'غير متاح':U.money(statement.totalInvoices))+'</strong></article><article class="card stat-card"><span class="stat-label">إجمالي المدفوعات</span><strong class="stat-value">'+(statement.totalPaid==null?'غير متاح':U.money(statement.totalPaid))+'</strong></article><article class="card stat-card"><span class="stat-label">المتأخر</span><strong class="stat-value unavailable">غير متاح</strong></article></div><section class="supplier-account-section"><div class="card-head"><h3>كشف الحساب</h3></div><div class="filter-bar supplier-statement-filters"><label class="field">من<input class="input" type="date" data-account-from value="'+U.escape(state.accountFrom)+'"></label><label class="field">إلى<input class="input" type="date" data-account-to value="'+U.escape(state.accountTo)+'"></label><label class="field">نوع الحركة<select class="select" data-account-type><option value="all">كل الحركات</option><option value="invoice"'+(state.accountType==="invoice"?' selected':'')+'>الفواتير</option><option value="payment"'+(state.accountType==="payment"?' selected':'')+'>المدفوعات</option></select></label><button class="button" type="button" data-account-reset>كل الفترات</button></div><div data-account-statement>'+statementHtml(statement)+'</div></section><section class="supplier-account-section"><div class="card-head"><h3>الفواتير والسداد</h3></div>'+invoiceTable(invoices,supplier)+'</section>';
       } catch(error) {
         if(token!==seq||!active())return;var target=host(supplier.id);
@@ -1660,25 +1750,32 @@
       var supplier=rows.find(function(row){return Number(row.id)===Number(state.selectedSupplierId);});
       if(!target)return;
       if(!supplier){target.innerHTML=rows.length?'<div class="empty-state">اختر موردًا من القائمة لعرض حسابه وفواتيره.</div>':'';return;}
-      target.innerHTML='<section class="card supplier-account-card" data-supplier-account="'+supplier.id+'"><div class="card-head"><div><span class="muted">المورد المحدد</span><h2>'+U.escape(supplier.name)+'</h2><p class="muted"><bdi>'+U.escape(supplier.code||"—")+'</bdi> · <bdi>'+U.escape(supplier.phone||"الهاتف غير مسجل")+'</bdi> · مسؤول التواصل: '+U.escape(supplier.contact||"غير مسجل")+'</p></div><div class="page-actions"><button class="button" type="button" data-add-account-invoice="'+supplier.id+'">+ إضافة فاتورة مديونية</button><button class="button primary" type="button" data-pay-supplier-account="'+supplier.id+'"'+(Number(supplier.payable)>0?'':' disabled')+'>سداد على الحساب</button></div></div><div class="card-body" data-account-invoices="'+supplier.id+'">جارٍ تحميل حساب المورد وكشفه...</div></section>';
+      target.innerHTML='<section class="card supplier-account-card" data-supplier-account="'+supplier.id+'"><div class="card-head"><div><span class="muted">المورد المحدد</span><h2>'+U.escape(supplier.name)+'</h2><p class="muted"><bdi>'+U.escape(supplier.code||"—")+'</bdi> · <bdi>'+U.escape(supplier.phone||"الهاتف غير مسجل")+'</bdi> · مسؤول التواصل: '+U.escape(supplier.contact||"غير مسجل")+'</p></div><div class="page-actions"><button class="button" type="button" data-add-account-invoice="'+supplier.id+'" disabled>+ إضافة فاتورة مديونية</button><button class="button primary" type="button" data-pay-supplier-account="'+supplier.id+'" disabled>سداد على الحساب</button></div></div><div class="card-body" data-account-invoices="'+supplier.id+'">جارٍ تحميل حساب المورد وكشفه...</div></section>';
       if(global.AlKhayalPrinting)global.AlKhayalPrinting.supplierReceipts(target.querySelector("[data-supplier-account]"),supplier.id);
       loadInvoices(supplier,token);
     }
     container.onclick=function(event){
       var page=event.target.closest("[data-accounts-page]");if(page&&!page.disabled){state.accountsPage=Number(page.getAttribute("data-accounts-page"));load();return;}
       if(event.target.closest("[data-accounts-retry]")){load();return;}
-      var choice=event.target.closest("[data-select-account-supplier]");if(choice){state.selectedSupplierId=Number(choice.getAttribute("data-select-account-supplier"));state.supplierId=state.selectedSupplierId;showSupplier();return;}
+      var choice=event.target.closest("[data-select-account-supplier]");if(choice){selectionError.hidden=true;state.selectedSupplierId=Number(choice.getAttribute("data-select-account-supplier"));state.supplierId=state.selectedSupplierId;showSupplier();return;}
       if(event.target.closest("[data-account-reset]")){state.accountFrom="";state.accountTo="";var selected=rows.find(function(x){return Number(x.id)===Number(state.selectedSupplierId);});if(selected)loadInvoices(selected,++seq);return;}
       var retry=event.target.closest("[data-retry-account]");if(retry){var owner=rows.find(function(x){return String(x.id)===retry.getAttribute("data-retry-account");});if(owner)loadInvoices(owner,seq);return;}
       var add=event.target.closest("[data-add-account-invoice]"),pay=event.target.closest("[data-pay-supplier-account]"),invoiceButton=event.target.closest("[data-account-invoice]"),card=event.target.closest("[data-supplier-account]");
       if(!card)return;var supplier=rows.find(function(x){return String(x.id)===card.getAttribute("data-supplier-account");});if(!supplier)return;
-      if(add)openSupplierInvoiceModal(supplier,function(){if(active())load();});
+      if(add&&!add.disabled)openSupplierInvoiceModal(supplier,function(){if(active())load();});
       if(pay&&!pay.disabled)openSupplierPaymentModal(supplier,null,function(){if(active())load();});
       var viewInvoice=event.target.closest('[data-view-purchase]');if(viewInvoice&&context)context.navigate('purchase-details',{invoiceId:Number(viewInvoice.getAttribute('data-view-purchase'))});
       if(invoiceButton){var invoice=(invoiceCache[supplier.id]||[]).find(function(x){return invoiceKey(x)===invoiceButton.getAttribute("data-account-invoice");});if(invoice&&invoice.documentStatus!=="draft")openSupplierPaymentModal(supplier,invoice,function(){if(active())load();});}
     };
     container.onchange=function(event){var supplier=rows.find(function(x){return Number(x.id)===Number(state.selectedSupplierId);});if(!supplier)return;if(event.target.closest("[data-account-from]")){state.accountFrom=event.target.value;loadInvoices(supplier,++seq);}else if(event.target.closest("[data-account-to]")){state.accountTo=event.target.value;loadInvoices(supplier,++seq);}else if(event.target.closest("[data-account-type]")){state.accountType=event.target.value;var target=container.querySelector("[data-account-statement]");if(target&&statementCache[supplier.id])target.innerHTML=statementHtml(statementCache[supplier.id]);}};
-    if(state.selectedSupplierId){var directToken=++seq;results.innerHTML='<div class="card card-body">جارٍ تحميل المورد المحدد...</div>';AlKhayalApi.request("/api/suppliers/"+encodeURIComponent(state.selectedSupplierId)).then(function(supplier){if(directToken!==seq||!active())return;rows=[supplier];state.accountsSearch=supplier.name;search.value=supplier.name;results.innerHTML='<div id="selectedSupplierAccount"></div>';showSupplier();}).catch(function(){if(directToken===seq)load();});}else load();
+    if(state.selectedSupplierId){var directToken=++seq;results.innerHTML='<div class="card card-body">جارٍ تحميل المورد المحدد...</div>';AlKhayalApi.request("/api/suppliers/"+encodeURIComponent(state.selectedSupplierId)).then(function(supplier){if(directToken!==seq||!active())return;rows=[supplier];state.accountsSearch=supplier.name;search.value=supplier.name;results.innerHTML='<div id="selectedSupplierAccount"></div>';showSupplier();}).catch(function(error){
+      if(directToken!==seq||!active())return;
+      state.supplierId=null;
+      state.selectedSupplierId=null;
+      selectionError.textContent=error.message||"تعذر تحميل المورد المحدد. اختر موردًا من القائمة.";
+      selectionError.hidden=false;
+      load();
+    });}else load();
   }
   function statement(screen, container, context) {
     if (screen.party === "supplier")
@@ -2587,9 +2684,9 @@
     }
     function renderPayments(customers) {
       container.innerHTML=UI.pageHeader(screen)+'<div class="field" style="max-width:520px"><label for="installmentCustomerFilter">العميل</label><select class="select" id="installmentCustomerFilter"><option value="">اختر العميل</option>'+customers.map(function(c){return '<option value="'+esc(c.id)+'">'+esc(c.name+(c.status!=="نشط"?" — غير نشط":""))+'</option>';}).join("")+'</select><p class="muted">القائمة تشمل كل العملاء، حتى غير النشطين، لإظهار عقودهم المفتوحة.</p></div><div class="form-grid"><label class="field">طريقة التحصيل<select class="select" id="installmentPayMethod"><option value="cash">نقدي</option><option value="card">بطاقة</option><option value="transfer">تحويل</option><option value="wallet">محفظة</option></select></label><label class="field">إيداع في<select class="select" id="installmentPayAccount"><option value="">اختر الحساب</option></select></label><label class="field">مبلغ التحصيل (فارغ لسداد المتبقي)<input class="input" id="installmentPayAmount" type="number" min="0.01" step="0.01"></label></div><div id="customerInstallments"></div>';
-      var select=container.querySelector("#installmentCustomerFilter"), host=container.querySelector("#customerInstallments"),loadVersion=0;var methodSelect=container.querySelector("#installmentPayMethod"),accountSelect=container.querySelector("#installmentPayAccount");function refreshAccounts(){accountSelect.innerHTML='<option value="">اختر الحساب</option>'+treasuryAccounts.filter(function(a){return a.type===(methodSelect.value==="cash"?"cash":"bank");}).map(function(a){return '<option value="'+a.id+'">'+esc(a.name)+'</option>';}).join("");if(accountSelect.options.length>1)accountSelect.value=accountSelect.options[1].value;}methodSelect.onchange=refreshAccounts;refreshAccounts();select.onchange=function(){context.state.installmentCustomerId=select.value?Number(select.value):null;context.state.installmentContractId=null;load();};if(context.state.installmentCustomerId){select.value=String(context.state.installmentCustomerId);load();}
+      var select=container.querySelector("#installmentCustomerFilter"), host=container.querySelector("#customerInstallments"),loadVersion=0,customerVersion=0;var methodSelect=container.querySelector("#installmentPayMethod"),accountSelect=container.querySelector("#installmentPayAccount");function refreshAccounts(){accountSelect.innerHTML='<option value="">اختر الحساب</option>'+treasuryAccounts.filter(function(a){return a.type===(methodSelect.value==="cash"?"cash":"bank");}).map(function(a){return '<option value="'+a.id+'">'+esc(a.name)+'</option>';}).join("");if(accountSelect.options.length>1)accountSelect.value=accountSelect.options[1].value;}methodSelect.onchange=refreshAccounts;refreshAccounts();select.onchange=function(){customerVersion++;container.querySelector("#installmentPayAmount").value="";context.state.installmentCustomerId=select.value?Number(select.value):null;context.state.installmentContractId=null;load();};if(context.state.installmentCustomerId){select.value=String(context.state.installmentCustomerId);load();}
       function load(){var customerId=select.value,version=++loadVersion;if(!customerId){host.innerHTML='<div class="empty-state">اختر عميلًا لعرض عقود وأقساط العميل.</div>';return;}host.innerHTML='<div class="empty-state">جارٍ تحميل الأقساط من قاعدة البيانات...</div>';Api.request("/api/customers/"+encodeURIComponent(customerId)+"/installments").then(function(contracts){if(version!==loadVersion||select.value!==customerId)return;draw(contracts);}).catch(function(error){if(version!==loadVersion)return;host.innerHTML='<div class="empty-state"><span>'+esc(error.message||"تعذر تحميل الأقساط.")+'</span><button class="button" data-retry-installments>إعادة المحاولة</button></div>';host.querySelector("[data-retry-installments]").onclick=load;});}
-      function draw(contracts){if(context.state.installmentContractId)contracts=contracts.filter(function(contract){return Number(contract.id)===Number(context.state.installmentContractId);});if(!contracts.length){host.innerHTML='<div class="empty-state">لا توجد عقود تقسيط لهذا العميل.</div>';return;}host.innerHTML=contracts.map(function(contract){return '<section class="card"><div class="card-head"><h2>'+esc(contract.contractNumber)+' — '+esc(contract.productName)+'</h2></div><div class="card-body"><p>إجمالي العقد '+money(contract.totalAmount)+' — المقدم '+money(contract.downPayment)+' — الفائدة '+esc(contract.interestRate)+'% ('+money(contract.interestAmount||0)+') — عند المرتجع: '+(contract.interestReturnPolicy==='cancel'?'تلغى حصتها':'تبقى مستحقة')+(contract.salesInvoiceId?' · <button class="button" type="button" data-installment-invoice="'+contract.salesInvoiceId+'">عرض فاتورة البيع</button>':' · عقد سابق دون فاتورة مرتبطة')+'</p>'+rowsTable([{key:"number",label:"القسط",number:true},{key:"dueDate",label:"الاستحقاق",date:true},{key:"amount",label:"القيمة",money:true},{key:"remainingAmount",label:"المتبقي",money:true},{key:"status",label:"الحالة"},{key:"action",label:"إجراء"}],contract.schedule.map(function(item){item.id=item.number;item.action=item.status==="مسدد"?"مسدد":'<button class="button" data-pay="'+contract.customerId+':'+contract.id+':'+item.number+'">تسديد القسط</button>';return item;}),false)+'</div></section>';}).join("");host.querySelectorAll("td").forEach(function(cell){var match=/^<button class="button" data-pay="(\d+:\d+:\d+)">تسديد القسط<\/button>$/.exec(cell.textContent);if(match){var button=container.ownerDocument.createElement("button");button.className="button";button.setAttribute("data-pay",match[1]);button.textContent="تسديد القسط";cell.textContent="";cell.appendChild(button);}});host.querySelectorAll("[data-installment-invoice]").forEach(function(button){button.onclick=function(){Api.request("/api/sales/installments/"+encodeURIComponent(button.getAttribute("data-installment-invoice"))+"/invoice").then(showInvoice).catch(function(error){UI.toast(error.message||"تعذر تحميل الفاتورة.","danger");});};});host.querySelectorAll("[data-pay]").forEach(function(button){button.onclick=function(){var parts=button.getAttribute("data-pay").split(":"),today=localDate(),accountId=Number(accountSelect.value)||null;if(!accountId){UI.toast("لا توجد خزنة/بنك مناسب لطريقة التحصيل المختارة.","warning");return;}var amountInput=container.querySelector("#installmentPayAmount"),enteredAmount=amountInput.value.trim(),contract=contracts.find(function(x){return String(x.id)===parts[1];}),row=contract&&contract.schedule.find(function(x){return String(x.number)===parts[2];});if(enteredAmount&&(!/^\d+(?:\.\d{1,2})?$/.test(enteredAmount)||Number(enteredAmount)<=0||!row||Number(enteredAmount)>Number(row.remainingAmount))){UI.toast("أدخل مبلغًا صحيحًا لا يتجاوز المتبقي على القسط.","warning");return;}var keyName="alkhayal_installment_pay_"+parts[1]+"_"+parts[2]+"_"+today+"_"+methodSelect.value+"_"+accountId+"_"+enteredAmount,key=sessionStorage.getItem(keyName);if(!key){key="installment-pay-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,10);sessionStorage.setItem(keyName,key);}button.disabled=true;Api.request("/api/customers/"+parts[0]+"/installments/"+parts[1]+"/payments/"+parts[2],{method:"POST",body:JSON.stringify({paidOn:today,operationKey:key,method:methodSelect.value,treasuryAccountId:accountId,amount:enteredAmount||null})}).then(function(){sessionStorage.removeItem(keyName);amountInput.value="";UI.toast("تم حفظ السداد في قاعدة البيانات وتحديث رصيد الأقساط.","success");load();}).catch(function(error){button.disabled=false;UI.toast(error.message||"تعذر تسجيل السداد.","danger");});};});}
+      function draw(contracts){if(context.state.installmentContractId)contracts=contracts.filter(function(contract){return Number(contract.id)===Number(context.state.installmentContractId);});if(!contracts.length){host.innerHTML='<div class="empty-state">لا توجد عقود تقسيط لهذا العميل.</div>';return;}host.innerHTML=contracts.map(function(contract){return '<section class="card"><div class="card-head"><h2>'+esc(contract.contractNumber)+' — '+esc(contract.productName)+'</h2></div><div class="card-body"><p>إجمالي العقد '+money(contract.totalAmount)+' — المقدم '+money(contract.downPayment)+' — الفائدة '+esc(contract.interestRate)+'% ('+money(contract.interestAmount||0)+') — عند المرتجع: '+(contract.interestReturnPolicy==='cancel'?'تلغى حصتها':'تبقى مستحقة')+(contract.salesInvoiceId?' · <button class="button" type="button" data-installment-invoice="'+contract.salesInvoiceId+'">عرض فاتورة البيع</button>':' · عقد سابق دون فاتورة مرتبطة')+'</p>'+rowsTable([{key:"number",label:"القسط",number:true},{key:"dueDate",label:"الاستحقاق",date:true},{key:"amount",label:"القيمة",money:true},{key:"remainingAmount",label:"المتبقي",money:true},{key:"status",label:"الحالة"},{key:"action",label:"إجراء"}],contract.schedule.map(function(item){item.id=item.number;item.action=item.status==="مسدد"?"مسدد":'<button class="button" data-pay="'+contract.customerId+':'+contract.id+':'+item.number+'">تسديد القسط</button>';return item;}),false)+'</div></section>';}).join("");host.querySelectorAll("td").forEach(function(cell){var match=/^<button class="button" data-pay="(\d+:\d+:\d+)">تسديد القسط<\/button>$/.exec(cell.textContent);if(match){var button=container.ownerDocument.createElement("button");button.className="button";button.setAttribute("data-pay",match[1]);button.textContent="تسديد القسط";cell.textContent="";cell.appendChild(button);}});host.querySelectorAll("[data-installment-invoice]").forEach(function(button){button.onclick=function(){Api.request("/api/sales/installments/"+encodeURIComponent(button.getAttribute("data-installment-invoice"))+"/invoice").then(showInvoice).catch(function(error){UI.toast(error.message||"تعذر تحميل الفاتورة.","danger");});};});host.querySelectorAll("[data-pay]").forEach(function(button){button.onclick=function(){var parts=button.getAttribute("data-pay").split(":"),today=localDate(),accountId=Number(accountSelect.value)||null;if(!accountId){UI.toast("لا توجد خزنة/بنك مناسب لطريقة التحصيل المختارة.","warning");return;}var amountInput=container.querySelector("#installmentPayAmount"),enteredAmount=amountInput.value.trim(),paymentCustomerVersion=customerVersion,contract=contracts.find(function(x){return String(x.id)===parts[1];}),row=contract&&contract.schedule.find(function(x){return String(x.number)===parts[2];});if(enteredAmount&&(!/^\d+(?:\.\d{1,2})?$/.test(enteredAmount)||Number(enteredAmount)<=0||!row||Number(enteredAmount)>Number(row.remainingAmount))){UI.toast("أدخل مبلغًا صحيحًا لا يتجاوز المتبقي على القسط.","warning");return;}var keyName="alkhayal_installment_pay_"+parts[1]+"_"+parts[2]+"_"+today+"_"+methodSelect.value+"_"+accountId+"_"+enteredAmount,key=sessionStorage.getItem(keyName);if(!key){key="installment-pay-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,10);sessionStorage.setItem(keyName,key);}button.disabled=true;Api.request("/api/customers/"+parts[0]+"/installments/"+parts[1]+"/payments/"+parts[2],{method:"POST",body:JSON.stringify({paidOn:today,operationKey:key,method:methodSelect.value,treasuryAccountId:accountId,amount:enteredAmount||null})}).then(function(){sessionStorage.removeItem(keyName);UI.toast("تم حفظ السداد في قاعدة البيانات وتحديث رصيد الأقساط.","success");if(select.value===parts[0]){if(paymentCustomerVersion===customerVersion&&amountInput.value.trim()===enteredAmount)amountInput.value="";load();}}).catch(function(error){button.disabled=false;UI.toast(error.message||"تعذر تسجيل السداد.","danger");});};});}
     }
     container.innerHTML=UI.pageHeader(screen)+'<div class="empty-state">جارٍ تحميل البيانات...</div>';
     Promise.all([Api.request("/api/customers"),screen.mode==="create"?Api.request("/api/inventory/warehouses"):Promise.resolve(null),Api.request("/api/treasury/accounts")]).then(function(data){if(context.isActive&&!context.isActive())return;treasuryAccounts=data[2]||[];var customers=(data[0]||[]).filter(function(c){return screen.mode!=="create"||c.status==="نشط"||(context.state&&Number(c.id)===Number(context.state.installmentCustomerId));});if(screen.mode==="create")renderSale(customers,(data[1]||[]).filter(function(w){return w.isActive;}));else renderPayments(customers);}).catch(function(error){if(!context.isActive||context.isActive())showFailure(error.message);});
@@ -2639,12 +2736,17 @@
   function maintenanceTracking(screen, container, context) {
     var treasuryAccounts=[],selectedCustomer=String(context.state.maintenanceCustomerId || "all"),statuses=["تم الاستلام","قيد الفحص","قيد الإصلاح","بانتظار قطعة","جاهز للتسليم"],customers=[];
     function localDate(){var date=new Date();return date.getFullYear()+"-"+String(date.getMonth()+1).padStart(2,"0")+"-"+String(date.getDate()).padStart(2,"0");}
-    function draw(rows){if(context.state.maintenanceTicketId)rows=rows.filter(function(ticket){return Number(ticket.id)===Number(context.state.maintenanceTicketId);});var visible=selectedCustomer==="all"?rows:rows.filter(function(ticket){return String(ticket.customerId)===selectedCustomer;});container.innerHTML=UI.pageHeader(screen)+'<div class="toolbar"><div class="field" style="max-width:420px"><label for="maintenanceCustomerFilter">العميل</label><select class="select" id="maintenanceCustomerFilter"><option value="all">كل العملاء</option>'+customers.map(function(customer){return '<option value="'+customer.id+'"'+(String(customer.id)===selectedCustomer?' selected':'')+'>'+U.escape(customer.name)+'</option>';}).join("")+'</select></div><span class="muted">'+U.number(visible.length)+' تذكرة صيانة</span></div><div class="maintenance-ticket-list">'+visible.map(function(ticket){return '<section class="card maintenance-ticket" data-maintenance-id="'+ticket.id+'"><div class="card-head"><div><h2>'+U.escape(ticket.ticketNumber)+'</h2><p class="muted">'+U.escape(ticket.customerName)+' · '+U.escape(ticket.phone||"")+'</p></div>'+UI.badge(ticket.status)+'</div><div class="card-body form-grid"><div class="field"><label>الجهاز</label><strong>'+U.escape(ticket.device+" — "+ticket.model)+'</strong></div><div class="field"><label>الرقم التسلسلي</label><strong class="ltr">'+U.escape(ticket.serial||"—")+'</strong></div><div class="field span-2"><label>العطل</label><span>'+U.escape(ticket.issue||"—")+'</span></div><div class="field"><label>الفني</label><span>'+U.escape(ticket.technician||"—")+'</span></div><div class="field"><label>التسليم المتوقع</label><span>'+U.date(ticket.expectedOn)+'</span></div><div class="field"><label>الملحقات</label><span>'+U.escape(ticket.accessories||"—")+'</span></div><div class="field"><label>التكلفة التقديرية</label><span>'+U.money(ticket.estimatedCost)+'</span></div><div class="field"><label>المقدم</label><span>'+U.money(ticket.advancePaid)+'</span></div>'+(ticket.status==="تم التسليم"?'<div class="field"><label>التكلفة النهائية</label><span>'+U.money(ticket.finalCost||0)+' · '+(ticket.settlementType==="cash"?"نقدي":"آجل على حساب العميل")+'</span></div><div class="field"><label>تاريخ التسليم الفعلي</label><span>'+U.date(ticket.deliveredOn)+'</span></div>':'<div class="field"><label for="maintenanceStatus_'+ticket.id+'">الحالة</label><select class="select" id="maintenanceStatus_'+ticket.id+'" data-maintenance-status>'+statuses.map(function(status){return '<option value="'+status+'"'+(ticket.status===status?' selected':'')+'>'+status+'</option>';}).join("")+'</select></div><div class="row-actions"><button class="button" type="button" data-save-maintenance-status>حفظ الحالة</button>'+(ticket.status==="جاهز للتسليم"?'<label class="field">المبلغ النهائي<input class="input" type="number" min="0" step="0.01" data-final-cost value="'+Number(ticket.estimatedCost||0)+'"></label><label class="field">طريقة السداد<select class="select" data-settlement-type><option value="cash">نقدي</option><option value="installment">آجل على حساب العميل</option></select></label><label class="field">خزنة إيداع التحصيل<select class="select" data-maintenance-account><option value="">اختر الخزنة</option>'+treasuryAccounts.filter(function(a){return a.type==="cash";}).map(function(a){return '<option value="'+a.id+'">'+U.escape(a.name)+'</option>';}).join("")+'</select></label><button class="button primary" type="button" data-deliver-maintenance>تسليم للعميل</button>':'')+'</div>')+'</div></section>';}).join("")+(visible.length?"":'<div class="empty-state">لا توجد أجهزة مسجلة لهذا العميل.</div>')+'</div>';container.querySelector("#maintenanceCustomerFilter").onchange=function(){selectedCustomer=this.value;context.state.maintenanceTicketId=null;load();};
+    function draw(rows){
+      if(context.state.maintenanceTicketId){
+        rows=rows.filter(function(ticket){return Number(ticket.id)===Number(context.state.maintenanceTicketId);});
+        if(!rows.length){container.innerHTML=UI.pageHeader(screen)+'<div class="empty-state" role="alert">لا يمكن فتح هذا السجل</div>';return;}
+        if(context.state.globalSearchMaintenance)customers=[{id:rows[0].customerId,name:rows[0].customerName}];
+      }var visible=selectedCustomer==="all"?rows:rows.filter(function(ticket){return String(ticket.customerId)===selectedCustomer;});container.innerHTML=UI.pageHeader(screen)+'<div class="toolbar"><div class="field" style="max-width:420px"><label for="maintenanceCustomerFilter">العميل</label><select class="select" id="maintenanceCustomerFilter"><option value="all">كل العملاء</option>'+customers.map(function(customer){return '<option value="'+customer.id+'"'+(String(customer.id)===selectedCustomer?' selected':'')+'>'+U.escape(customer.name)+'</option>';}).join("")+'</select></div><span class="muted">'+U.number(visible.length)+' تذكرة صيانة</span></div><div class="maintenance-ticket-list">'+visible.map(function(ticket){return '<section class="card maintenance-ticket" data-maintenance-id="'+ticket.id+'"><div class="card-head"><div><h2>'+U.escape(ticket.ticketNumber)+'</h2><p class="muted">'+U.escape(ticket.customerName)+' · '+U.escape(ticket.phone||"")+'</p></div>'+UI.badge(ticket.status)+'</div><div class="card-body form-grid"><div class="field"><label>الجهاز</label><strong>'+U.escape(ticket.device+" — "+ticket.model)+'</strong></div><div class="field"><label>الرقم التسلسلي</label><strong class="ltr">'+U.escape(ticket.serial||"—")+'</strong></div><div class="field span-2"><label>العطل</label><span>'+U.escape(ticket.issue||"—")+'</span></div><div class="field"><label>الفني</label><span>'+U.escape(ticket.technician||"—")+'</span></div><div class="field"><label>التسليم المتوقع</label><span>'+U.date(ticket.expectedOn)+'</span></div><div class="field"><label>الملحقات</label><span>'+U.escape(ticket.accessories||"—")+'</span></div><div class="field"><label>التكلفة التقديرية</label><span>'+U.money(ticket.estimatedCost)+'</span></div><div class="field"><label>المقدم</label><span>'+U.money(ticket.advancePaid)+'</span></div>'+(ticket.status==="تم التسليم"?'<div class="field"><label>التكلفة النهائية</label><span>'+U.money(ticket.finalCost||0)+' · '+(ticket.settlementType==="cash"?"نقدي":"آجل على حساب العميل")+'</span></div><div class="field"><label>تاريخ التسليم الفعلي</label><span>'+U.date(ticket.deliveredOn)+'</span></div>':'<div class="field"><label for="maintenanceStatus_'+ticket.id+'">الحالة</label><select class="select" id="maintenanceStatus_'+ticket.id+'" data-maintenance-status>'+statuses.map(function(status){return '<option value="'+status+'"'+(ticket.status===status?' selected':'')+'>'+status+'</option>';}).join("")+'</select></div><div class="row-actions"><button class="button" type="button" data-save-maintenance-status>حفظ الحالة</button>'+(ticket.status==="جاهز للتسليم"?'<label class="field">المبلغ النهائي<input class="input" type="number" min="0" step="0.01" data-final-cost value="'+Number(ticket.estimatedCost||0)+'"></label><label class="field">طريقة السداد<select class="select" data-settlement-type><option value="cash">نقدي</option><option value="installment">آجل على حساب العميل</option></select></label><label class="field">خزنة إيداع التحصيل<select class="select" data-maintenance-account><option value="">اختر الخزنة</option>'+treasuryAccounts.filter(function(a){return a.type==="cash";}).map(function(a){return '<option value="'+a.id+'">'+U.escape(a.name)+'</option>';}).join("")+'</select></label><button class="button primary" type="button" data-deliver-maintenance>تسليم للعميل</button>':'')+'</div>')+'</div></section>';}).join("")+(visible.length?"":'<div class="empty-state">لا توجد أجهزة مسجلة لهذا العميل.</div>')+'</div>';container.querySelector("#maintenanceCustomerFilter").onchange=function(){selectedCustomer=this.value;context.state.maintenanceTicketId=null;load();};
       container.querySelectorAll("[data-save-maintenance-status]").forEach(function(button){button.onclick=function(){var card=button.closest("[data-maintenance-id]"),id=card.getAttribute("data-maintenance-id"),status=card.querySelector("[data-maintenance-status]").value,key="maintenance-status-"+id+"-"+Date.now().toString(36);button.disabled=true;Api.request("/api/maintenance/tickets/"+id+"/status",{method:"PUT",body:JSON.stringify({status:status,operationKey:key})}).then(function(){UI.toast("تم حفظ حالة الصيانة.","success");load();}).catch(function(error){button.disabled=false;UI.toast(error.message||"تعذر تحديث الحالة.","danger");});};});
       container.querySelectorAll("[data-deliver-maintenance]").forEach(function(button){button.onclick=function(){var card=button.closest("[data-maintenance-id]"),id=card.getAttribute("data-maintenance-id"),body={finalCost:Number(card.querySelector("[data-final-cost]").value)||0,settlementType:card.querySelector("[data-settlement-type]").value,treasuryAccountId:card.querySelector("[data-settlement-type]").value==="cash"?(Number(card.querySelector("[data-maintenance-account]").value)||null):null,deliveredOn:localDate()},identity=JSON.stringify(body),storageKey="alkhayal_maintenance_delivery_"+id,stored;try{stored=JSON.parse(sessionStorage.getItem(storageKey)||"null");}catch(e){stored=null;}if(!stored||stored.identity!==identity){stored={identity:identity,key:"maintenance-delivery-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,10)};sessionStorage.setItem(storageKey,JSON.stringify(stored));}body.operationKey=stored.key;button.disabled=true;Api.request("/api/maintenance/tickets/"+id+"/deliver",{method:"POST",body:JSON.stringify(body)}).then(function(){sessionStorage.removeItem(storageKey);UI.toast(body.settlementType==="cash"?"تم تسجيل التسليم والسداد النقدي.":"تم تسجيل التسليم وإضافة المديونية إلى كشف حساب العميل.","success");load();}).catch(function(error){button.disabled=false;UI.toast(error.message||"تعذر تسجيل التسليم.","danger");});};});
     }
-    function load(){container.innerHTML=UI.pageHeader(screen)+'<div class="empty-state">جارٍ تحميل تذاكر الصيانة...</div>';Api.request("/api/maintenance/tickets"+(selectedCustomer==="all"?"":"?customerId="+encodeURIComponent(selectedCustomer))).then(function(rows){if(context.isActive&&!context.isActive())return;draw(rows||[]);}).catch(function(error){if(!context.isActive||context.isActive())container.innerHTML=UI.pageHeader(screen)+'<div class="empty-state"><strong>تعذر تحميل تذاكر الصيانة</strong><span>'+U.escape(error.message||"")+'</span><button class="button" data-maintenance-retry>إعادة المحاولة</button></div>';var retry=container.querySelector("[data-maintenance-retry]");if(retry)retry.onclick=load;});}
-    container.innerHTML=UI.pageHeader(screen)+'<div class="empty-state">جارٍ تحميل العملاء...</div>';Promise.all([Api.request("/api/customers"),Api.request("/api/treasury/accounts")]).then(function(data){if(context.isActive&&!context.isActive())return;customers=(data[0]||[]).filter(function(customer){return customer.status==="نشط";});treasuryAccounts=data[1]||[];load();}).catch(function(error){if(!context.isActive||context.isActive())container.innerHTML=UI.pageHeader(screen)+'<div class="empty-state"><strong>تعذر تحميل العملاء</strong><span>'+U.escape(error.message||"")+'</span></div>';});
+    function load(){container.innerHTML=UI.pageHeader(screen)+'<div class="empty-state">جارٍ تحميل تذاكر الصيانة...</div>';Api.request("/api/maintenance/tickets"+(context.state.maintenanceTicketId?"?ticketId="+encodeURIComponent(context.state.maintenanceTicketId):selectedCustomer==="all"?"":"?customerId="+encodeURIComponent(selectedCustomer))).then(function(rows){if(context.isActive&&!context.isActive())return;draw(rows||[]);}).catch(function(error){if(!context.isActive||context.isActive())container.innerHTML=UI.pageHeader(screen)+'<div class="empty-state"><strong>تعذر تحميل تذاكر الصيانة</strong><span>'+U.escape(error.message||"")+'</span><button class="button" data-maintenance-retry>إعادة المحاولة</button></div>';var retry=container.querySelector("[data-maintenance-retry]");if(retry)retry.onclick=load;});}
+    container.innerHTML=UI.pageHeader(screen)+'<div class="empty-state">جارٍ تحميل العملاء...</div>';Promise.all([context.state.globalSearchMaintenance?Promise.resolve([]):Api.request("/api/customers"),Api.request("/api/treasury/accounts")]).then(function(data){if(context.isActive&&!context.isActive())return;customers=(data[0]||[]).filter(function(customer){return customer.status==="نشط";});treasuryAccounts=data[1]||[];load();}).catch(function(error){if(!context.isActive||context.isActive())container.innerHTML=UI.pageHeader(screen)+'<div class="empty-state"><strong>تعذر تحميل العملاء</strong><span>'+U.escape(error.message||"")+'</span></div>';});
   }
   function cashServices(screen, container) {
     var services = [

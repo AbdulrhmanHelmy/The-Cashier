@@ -6,6 +6,20 @@
   function key() { var b = new Uint8Array(16); global.crypto.getRandomValues(b); return Array.prototype.map.call(b, function (v) { return ("0" + v.toString(16)).slice(-2); }).join(""); }
   function label(type) { return type === "sales" ? "مرتجع بيع" : "مرتجع شراء"; }
   function message(node, reason) { node.hidden = false; node.textContent = reason.message || reason; }
+  function historyUrl(search, page) {
+    return "/api/returns/page?search=" + encodeURIComponent(search.trim()) + "&page=" + (page || 1);
+  }
+  function historyPager(result) {
+    var page = result.page, last = Math.max(1, Math.ceil(result.totalCount / result.pageSize));
+    return '<nav class="pagination invoice-pagination" aria-label="صفحات المرتجعات"><span>صفحة ' + page + ' من ' + last + ' · ' + result.totalCount + ' مرتجع</span><div class="pagination-buttons"><button class="button" type="button" data-history-page="' + (page - 1) + '"' + (page === 1 ? ' disabled' : '') + '>السابق</button><button class="button" type="button" data-history-page="' + (page + 1) + '"' + (page === last ? ' disabled' : '') + '>التالي</button></div></nav>';
+  }
+  function historyClick(event, changePage) {
+    var button = event.target.closest("[data-history-page]");
+    if (!button || button.disabled) return false;
+    changePage(Number(button.getAttribute("data-history-page")));
+    return true;
+  }
+
   function management(screen, container, context) {
     var state = context.state, draft = state.returnDraft || (state.returnDraft = { type: "sales", number: "", invoice: null, quantities: {}, units: {}, damaged: {}, reason: "", mode: "cash_refund" }), listToken = 0, lookupToken = 0, pickerToken = 0;
     var picker = state.returnInvoicePicker || (state.returnInvoicePicker = { type: "all", search: "", from: "", to: "", status: "eligible", page: 1, pageSize: 12, open: false });
@@ -58,14 +72,32 @@
         pickerResults.innerHTML = rows.length ? '<div class="table-wrap"><table class="data-table returns-picker-table"><thead><tr><th>الفاتورة</th><th>النوع</th><th>التاريخ</th><th>العميل / المورد</th><th>الإجمالي</th><th>الأهلية</th><th></th></tr></thead><tbody>' + rows.map(function (row) { var status = row.isEligible ? (row.eligibility === "partial" ? "مرتجع جزئي — متاح" : "متاحة") : "مستردة بالكامل"; return '<tr class="return-invoice-' + U.escape(row.type) + '"><td><bdi>' + U.escape(row.invoiceNumber) + '</bdi></td><td><span class="badge ' + (row.type === "sales" ? "warning" : "success") + '">' + (row.type === "sales" ? "بيع" : "شراء") + '</span></td><td>' + numericHtml(row.invoiceDate) + '</td><td>' + U.escape(row.partyName) + '</td><td>' + numericHtml(row.total) + '</td><td><span class="returns-eligibility ' + (row.isEligible ? "is-eligible" : "is-full") + '">' + status + '</span></td><td><button class="button primary" type="button" data-pick-invoice="' + row.id + '" data-pick-type="' + row.type + '"' + (row.isEligible ? '' : ' disabled') + '>اختيار</button></td></tr>'; }).join("") + '</tbody></table></div><div class="returns-picker-pagination"><button class="button" type="button" data-picker-page="' + (page.page - 1) + '"' + (page.page <= 1 ? ' disabled' : '') + '>السابق</button><span>صفحة ' + page.page + ' من ' + Math.max(1, page.totalPages) + ' · ' + page.totalCount + ' فاتورة</span><button class="button" type="button" data-picker-page="' + (page.page + 1) + '"' + (page.page >= page.totalPages ? ' disabled' : '') + '>التالي</button></div>' : '<div class="empty-state"><strong>لا توجد فواتير مطابقة</strong><span>غيّر البحث أو المدة أو نوع الفاتورة.</span></div>';
       }).catch(function (reason) { if (context.isActive() && current === pickerToken) pickerResults.innerHTML = '<div class="empty-state"><strong>تعذر تحميل الفواتير</strong><span>' + U.escape(reason.message) + '</span><button class="button" type="button" data-picker-retry>إعادة المحاولة</button></div>'; });
     }
-    function openPicker() { picker.open = true; pickerLayer.hidden = false; loadPicker(); var input = container.querySelector("#pickerSearch"); if (input) input.focus(); }
+    var pickerTrigger;
+    function openPicker(event) {
+      if (frozen()) return;
+      pickerTrigger = event && event.currentTarget;
+      picker.open = true; pickerLayer.hidden = false; loadPicker();
+      container.querySelector("#pickerSearch").focus();
+    }
+    function closePicker() {
+      picker.open = false; pickerLayer.hidden = true;
+      ++pickerToken; ++lookupToken;
+      drawInvoice();
+      if (pickerTrigger) pickerTrigger.focus();
+    }
     function resetLookup() { if (frozen()) return; ++lookupToken; draft.invoice = null; draft.quantities = {}; draft.units = {}; draft.damaged = {}; drawInvoice(); error.hidden = true; }
     type.onchange = function () { draft.type = type.value; resetLookup(); }; number.oninput = function () { draft.number = number.value; resetLookup(); };
-    container.querySelector("[data-add-return]").onclick = function () { state.returnEditor = true; editor.hidden = false; openPicker(); };
+    container.querySelector("[data-add-return]").onclick = function (event) { state.returnEditor = true; editor.hidden = false; openPicker(event); };
     container.querySelector("[data-open-invoice-picker]").onclick = openPicker;
-    container.querySelector("[data-close-invoice-picker]").onclick = function () { picker.open = false; pickerLayer.hidden = true; };
+    container.querySelector("[data-close-invoice-picker]").onclick = closePicker;
+    pickerLayer.onkeydown = function (event) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      closePicker();
+    };
     pickerLayer.onclick = function (event) {
-      if (event.target === pickerLayer) { picker.open = false; pickerLayer.hidden = true; return; }
+      if (event.target === pickerLayer) { closePicker(); return; }
       var select = event.target.closest("[data-pick-invoice]"); if (select) { loadInvoiceById(select.getAttribute("data-pick-type"), Number(select.getAttribute("data-pick-invoice"))); return; }
       var pageButton = event.target.closest("[data-picker-page]"); if (pageButton && !pageButton.disabled) { picker.page = Number(pageButton.getAttribute("data-picker-page")); loadPicker(); return; }
       if (event.target.closest("[data-picker-retry]")) loadPicker();
@@ -99,34 +131,37 @@
         draft.busy = false; draft.pending = null; draft.invoice = null; draft.quantities = {}; draft.units = {}; draft.damaged = {}; draft.reason = ""; UI.toast(invoice.paymentInstrumentName ? "تم حفظ المرتجع. الرد الإلكتروني معلّق حتى تأكيده خارجيًا." : "تم حفظ المرتجع وتسويته.", "success"); draft.settled(result);
       }).catch(function (reason) { draft.busy = false; if (reason.status && reason.status < 500) draft.pending = null; draft.settled(null, reason); });
     }
-    function loadList() {
+    function loadList() { results.onclick = null;
       var current = ++listToken; results.innerHTML = '<div class="empty-state" role="status">جارٍ تحميل المرتجعات...</div>';
-      Api.request("/api/returns?search=" + encodeURIComponent(search.value.trim())).then(function (rows) {
+      Api.request(historyUrl(search.value, state.returnHistoryPage)).then(function (result) {
         if (!context.isActive() || current !== listToken) return;
-        results.innerHTML = '<div class="table-wrap"><table class="data-table"><thead><tr><th>المرتجع</th><th>النوع</th><th>الفاتورة الأصلية</th><th>العميل / المورد</th><th>التاريخ</th><th>الإجمالي (ج.م)</th><th>التسوية</th></tr></thead><tbody>' + (rows.length ? rows.map(function (row) { return '<tr data-return-id="' + row.id + '" data-return-type="' + row.type + '"><td><button class="table-action" type="button">' + U.escape(row.number) + '</button></td><td>' + label(row.type) + '</td><td>' + U.escape(row.invoiceNumber) + '</td><td>' + U.escape(row.partyName) + '</td><td>' + numericHtml(dateTime(row.createdUtc)) + '</td><td>' + numericHtml(row.total) + '</td><td>' + (row.settlement === 'electronic_pending' ? 'رد إلكتروني معلّق' : row.settlement === 'electronic_confirmed' ? 'رد إلكتروني مؤكد' : row.settlement === 'credit' ? 'تسوية حساب' : row.settlement === 'mixed' ? 'حساب ونقد' : 'نقدي') + '</td></tr>'; }).join("") : '<tr><td colspan="7"><div class="empty-state">لا توجد مرتجعات مطابقة.</div></td></tr>') + '</tbody></table></div>';
-        results.onclick = function (event) { var row = event.target.closest("[data-return-id]"); if (row) context.navigate("return-details", { returnType: row.getAttribute("data-return-type"), returnId: Number(row.getAttribute("data-return-id")) }); };
+        var rows = result.items; state.returnHistoryPage = result.page;
+        results.innerHTML = '<div class="table-wrap"><table class="data-table"><thead><tr><th>المرتجع</th><th>النوع</th><th>الفاتورة الأصلية</th><th>العميل / المورد</th><th>التاريخ</th><th>الإجمالي (ج.م)</th><th>التسوية</th></tr></thead><tbody>' + (rows.length ? rows.map(function (row) { return '<tr data-return-id="' + row.id + '" data-return-type="' + row.type + '"><td><button class="table-action" type="button">' + U.escape(row.number) + '</button></td><td>' + label(row.type) + '</td><td>' + U.escape(row.invoiceNumber) + '</td><td>' + U.escape(row.partyName) + '</td><td>' + numericHtml(dateTime(row.createdUtc)) + '</td><td>' + numericHtml(row.total) + '</td><td>' + (row.settlement === 'electronic_pending' ? 'رد إلكتروني معلّق' : row.settlement === 'electronic_confirmed' ? 'رد إلكتروني مؤكد' : row.settlement === 'credit' ? 'تسوية حساب' : row.settlement === 'mixed' ? 'حساب ونقد' : 'نقدي') + '</td></tr>'; }).join("") : '<tr><td colspan="7"><div class="empty-state">لا توجد مرتجعات مطابقة.</div></td></tr>') + '</tbody></table></div>' + historyPager(result);
+        results.onclick = function (event) { if (historyClick(event, function (page) { state.returnHistoryPage = page; loadList(); })) return; var row = event.target.closest("[data-return-id]"); if (row) context.navigate("return-details", { returnType: row.getAttribute("data-return-type"), returnId: Number(row.getAttribute("data-return-id")) }); };
       }).catch(function (reason) { if (!context.isActive() || current !== listToken) return; results.innerHTML = '<div class="empty-state">' + U.escape(reason.message) + '<button class="button" data-return-list-retry>إعادة المحاولة</button></div>'; results.querySelector("[data-return-list-retry]").onclick = loadList; });
     }
-    var delayed = U.debounce(loadList, 180); search.oninput = function () { state.returnSearch = search.value; ++listToken; delayed(); };
+    var delayed = U.debounce(loadList, 180); search.oninput = function () { state.returnSearch = search.value; state.returnHistoryPage = 1; results.onclick = null; ++listToken; delayed(); };
     drawInvoice(); loadList();
     if (state.returnInvoiceType && state.returnInvoiceId) { var initialType = state.returnInvoiceType, initialId = state.returnInvoiceId; state.returnInvoiceType = null; state.returnInvoiceId = null; loadInvoiceById(initialType, initialId); }
   }
   function detail(screen, container, context) {
     var state = context.state, sequence = 0, pickerSequence = 0;
-    container.innerHTML = UI.pageHeader(screen, '<button class="button" data-returns-back>إدارة المرتجعات</button>') + '<section class="card"><div class="card-body form-grid"><div class="field"><label for="returnDetailSearch">بحث برقم المرتجع أو الفاتورة أو العميل / المورد</label><input class="input" type="search" id="returnDetailSearch" value="' + U.escape(state.returnDetailSearch || "") + '"></div><div class="field"><label for="returnDetailChoice">المرتجع</label><select class="select" id="returnDetailChoice" disabled><option value="">جارٍ تحميل المرتجعات...</option></select></div><p class="field-error span-2" data-return-selector-error role="alert" hidden></p><div><button class="button" data-return-selector-retry hidden>إعادة تحميل القائمة</button></div></div></section><section class="card"><div class="card-body" data-return-detail aria-live="polite"></div></section>';
+    container.innerHTML = UI.pageHeader(screen, '<button class="button" data-returns-back>إدارة المرتجعات</button>') + '<section class="card"><div class="card-body form-grid"><div class="field"><label for="returnDetailSearch">بحث برقم المرتجع أو الفاتورة أو العميل / المورد</label><input class="input" type="search" id="returnDetailSearch" value="' + U.escape(state.returnDetailSearch || "") + '"></div><div class="field"><label for="returnDetailChoice">المرتجع</label><select class="select" id="returnDetailChoice" disabled><option value="">جارٍ تحميل المرتجعات...</option></select><div data-return-selector-pages></div></div><p class="field-error span-2" data-return-selector-error role="alert" hidden></p><div><button class="button" data-return-selector-retry hidden>إعادة تحميل القائمة</button></div></div></section><section class="card"><div class="card-body" data-return-detail aria-live="polite"></div></section>';
     container.querySelector("[data-returns-back]").onclick = function () { context.navigate("returns-overview"); };
     var host = container.querySelector("[data-return-detail]"), picker = container.querySelector("#returnDetailChoice"), search = container.querySelector("#returnDetailSearch"), pickerError = container.querySelector("[data-return-selector-error]"), pickerRetry = container.querySelector("[data-return-selector-retry]");
+    var pages = container.querySelector("[data-return-selector-pages]");
     function loadPicker() {
-      var current = ++pickerSequence; picker.disabled = true; pickerError.hidden = pickerRetry.hidden = true;
-      Api.request("/api/returns?search=" + encodeURIComponent(search.value.trim())).then(function (rows) {
+      var current = ++pickerSequence; pages.innerHTML = ""; pages.onclick = null; picker.disabled = true; pickerError.hidden = pickerRetry.hidden = true;
+      Api.request(historyUrl(search.value, state.returnPickerPage)).then(function (result) {
         if (!context.isActive() || current !== pickerSequence) return;
+        var rows = result.items; state.returnPickerPage = result.page;
         var selected = state.returnType && state.returnId ? state.returnType + ":" + state.returnId : "";
-        picker.innerHTML = '<option value="">' + (rows.length ? "اختر المرتجع — آخر 200 نتيجة" : "لا توجد مرتجعات مطابقة") + '</option>' + (selected && !rows.some(function (row) { return row.type + ":" + row.id === selected; }) ? '<option value="' + U.escape(selected) + '" selected>المرتجع المحدد</option>' : '') + rows.map(function (row) { var value = row.type + ":" + row.id; return '<option value="' + value + '"' + (value === selected ? ' selected' : '') + '>' + U.escape(label(row.type) + " — " + row.number + " — فاتورة " + row.invoiceNumber + " — " + row.partyName) + '</option>'; }).join("");
-        picker.disabled = false;
+        picker.innerHTML = '<option value="">' + (rows.length ? "اختر المرتجع" : "لا توجد مرتجعات مطابقة") + '</option>' + (selected && !rows.some(function (row) { return row.type + ":" + row.id === selected; }) ? '<option value="' + U.escape(selected) + '" selected>المرتجع المحدد</option>' : '') + rows.map(function (row) { var value = row.type + ":" + row.id; return '<option value="' + value + '"' + (value === selected ? ' selected' : '') + '>' + U.escape(label(row.type) + " — " + row.number + " — فاتورة " + row.invoiceNumber + " — " + row.partyName) + '</option>'; }).join("");
+        picker.disabled = false; pages.innerHTML = historyPager(result); pages.onclick = function (event) { historyClick(event, function (page) { state.returnPickerPage = page; loadPicker(); }); };
       }).catch(function (reason) { if (!context.isActive() || current !== pickerSequence) return; message(pickerError, reason); pickerRetry.hidden = false; });
     }
     picker.onchange = function () { var identity = picker.value.split(":"); state.returnType = identity[0]; state.returnId = Number(identity[1]) || null; load(); };
-    var delayed = U.debounce(loadPicker, 180); search.oninput = function () { state.returnDetailSearch = search.value; ++pickerSequence; delayed(); };
+    var delayed = U.debounce(loadPicker, 180); search.oninput = function () { state.returnDetailSearch = search.value; state.returnPickerPage = 1; pages.onclick = null; ++pickerSequence; delayed(); };
     pickerRetry.onclick = loadPicker;
     function load() {
       var current = ++sequence;

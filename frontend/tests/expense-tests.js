@@ -12,7 +12,7 @@ function harness(defer) {
     calls.push({ url: url, config: config });
     if (config) return new Promise(function (resolve, reject) { pending.push({ resolve: resolve, reject: reject }); });
     if (defer) return new Promise(function (resolve, reject) { reads.push({ url: url, resolve: resolve, reject: reject }); });
-    return Promise.resolve(url.endsWith("categories") ? types : url.endsWith("accounts") ? accounts : []);
+    return Promise.resolve(url.endsWith("categories") ? types : url.endsWith("accounts") ? accounts : {items:[],page:1,totalCount:0});
   } } };
   vm.runInNewContext(source, { window: win, Uint8Array: Uint8Array, Date: Date }, { filename: "expenses.js" });
   var shellEnd = shellSource.indexOf("  function roleLabel(");
@@ -74,7 +74,7 @@ async function loading() {
   h.reads[0].reject({ message: "تعذر التحميل" }); h.reads[1].resolve([]); h.reads[2].reject({ message: "تعذر قراءة السندات" }); await settle();
   assert.ok(node.querySelector("[data-expense-retry]")); assert.ok(node.querySelector("[data-vouchers-retry]"));
   node.querySelector("[data-expense-retry]").onclick(); h.reads[3].resolve(h.types); h.reads[4].resolve(h.accounts); await settle(); assert.ok(node.querySelector("#expenseVoucherForm"));
-  node.querySelector("[data-vouchers-retry]").onclick(); var before = node.querySelector("[data-expense-vouchers]").innerHTML; h.leave(); h.reads[5].resolve([{ number: "late" }]); await settle(); assert.equal(node.querySelector("[data-expense-vouchers]").innerHTML, before);
+  node.querySelector("[data-vouchers-retry]").onclick(); var before = node.querySelector("[data-expense-vouchers]").innerHTML; h.leave(); h.reads[5].resolve({items:[{number:"late"}],page:1,totalCount:1}); await settle(); assert.equal(node.querySelector("[data-expense-vouchers]").innerHTML, before);
 }
 module.exports = async function () {
   var registry = JSON.parse(fs.readFileSync(path.join(__dirname, "../data/screens.json"), "utf8"));

@@ -1,6 +1,6 @@
 (function (global) {
   "use strict";
-  var U = global.AlKhayalUtils, modalLayer, toastStack, lastFocusedElement;
+  var U = global.AlKhayalUtils, modalLayer, toastStack, lastFocusedElement, fallbackFocus;
   function initialize() { modalLayer = document.getElementById("modalLayer"); toastStack = document.getElementById("toastStack"); }
   function pageHeader(screen, actions) { return '<header class="page-header"><div><div class="breadcrumbs">The Cashier / ' + U.escape(screen.module) + ' / ' + U.escape(screen.title) + '</div><h1>' + U.escape(screen.title) + '</h1><p class="page-description">' + U.escape(screen.description || "") + '</p></div><div class="page-actions"><button class="button" type="button" data-page-refresh aria-label="تحديث البيانات">تحديث البيانات</button>' + (actions || "") + '</div></header>'; }
   function mockBanner(extra) { return '<div class="mock-banner" role="status"><span><strong>وضع تجريبي</strong> — البيانات غير محفوظة فعليًا.</span>' + (extra || "") + '</div>'; }
@@ -8,9 +8,21 @@
   function displayError(value) { var message = String(value == null ? "" : value).trim(); if (message && /[\u0600-\u06ff]/.test(message) && !/\/api\/|(?:System|Microsoft)\.[A-Za-z.]|Exception|stack trace| at [A-Za-z0-9_$.-]+\(/i.test(message)) return message; return "تعذر تنفيذ الطلب. أعد المحاولة."; }
   function badge(value) { var text = displayLabel(value), tone = /مؤكد|نشط|حاضر|مفتوحة|منتظم|مكتمل|وارد|جاهز|مرحّل/.test(text) ? "success" : /موقوف|خطر|متأخر|صادر|ملغى/.test(text) ? "danger" : /انتظار|تحذير|مسودة|مراجعة|لم تبدأ|تحت التجهيز|قيد الانتظار/.test(text) ? "warning" : "info"; return '<span class="badge ' + tone + '">' + U.escape(text) + '</span>'; }
   function chart(points) { var max = Math.max.apply(Math, points.map(function (point) { return Number(point.value) || 0; }).concat([1])); return '<div class="chart" role="img" aria-label="رسم بياني للقيم">' + points.map(function (point) { var height = Math.max(3, Math.round(Number(point.value || 0) / max * 100)); return '<div class="chart-column" title="' + U.escape(point.label + ': ' + U.money(point.value)) + '"><div class="chart-bar" style="height:' + height + '%"></div><span>' + U.escape(point.label) + '</span></div>'; }).join("") + '</div>'; }
-  function field(definition, value) { var id = definition.id, required = definition.required ? " required" : "", span = definition.span ? " span-2" : "", input; if (definition.type === "select") input = '<select class="select" id="' + U.escape(id) + '" name="' + U.escape(id) + '"' + required + '>' + (definition.options || []).map(function (option) { var current = typeof option === "object" ? option.value : option, label = typeof option === "object" ? option.label : option; return '<option value="' + U.escape(current) + '"' + (String(current) === String(value) ? " selected" : "") + '>' + U.escape(label) + '</option>'; }).join("") + '</select>'; else if (definition.type === "textarea") input = '<textarea class="textarea" id="' + U.escape(id) + '" name="' + U.escape(id) + '" placeholder="' + U.escape(definition.placeholder || "") + '"' + required + '>' + U.escape(value || "") + '</textarea>'; else input = '<input class="input' + (definition.ltr ? " ltr" : "") + '" id="' + U.escape(id) + '" name="' + U.escape(id) + '" type="' + U.escape(definition.type || "text") + '" value="' + U.escape(value == null ? "" : value) + '" placeholder="' + U.escape(definition.placeholder || "") + '"' + (definition.min != null ? ' min="' + definition.min + '"' : "") + (definition.step != null ? ' step="' + definition.step + '"' : "") + required + '>'; return '<div class="field' + span + '"><label for="' + U.escape(id) + '">' + U.escape(definition.label) + (definition.required ? " *" : "") + '</label>' + input + '<small class="field-error" data-error-for="' + U.escape(id) + '"></small></div>'; }
-  function closeModal() { if (!modalLayer) return; modalLayer.hidden = true; modalLayer.innerHTML = ""; if (lastFocusedElement && lastFocusedElement.focus) lastFocusedElement.focus(); lastFocusedElement = null; }
-  function modal(options) { if (!modalLayer) initialize(); lastFocusedElement = document.activeElement; modalLayer.innerHTML = '<section class="modal' + (options.wide ? " wide" : "") + (options.compact ? " compact" : "") + '" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><header class="modal-header"><h2 id="modalTitle">' + U.escape(options.title) + '</h2><button class="icon-button" type="button" data-modal-close aria-label="إغلاق">×</button></header><div class="modal-body">' + options.body + '</div><footer class="modal-actions">' + (options.actions || '<button class="button" type="button" data-modal-close>إغلاق</button>') + '</footer></section>'; modalLayer.hidden = false; var modalElement = modalLayer.querySelector(".modal"), firstClose = modalLayer.querySelector("[data-modal-close]"); function requestClose(){var decision=options.beforeClose?options.beforeClose():true;if(decision&&typeof decision.then==="function"){decision.then(function(ok){if(ok)closeModal();});return false;}if(decision===false)return false;closeModal();return true;} modalLayer._forceClose=closeModal; modalLayer.onclick = function (event) { if (event.target === modalLayer || event.target.closest("[data-modal-close]")) requestClose(); }; modalLayer.onkeydown = function (event) { if (event.key === "Escape") { event.preventDefault(); requestClose(); return; } if (event.key !== "Tab") return; var focusable = modalElement.querySelectorAll("button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex='-1'])"); if (!focusable.length) return; var first = focusable[0], last = focusable[focusable.length - 1]; if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); } }; if (options.onOpen) options.onOpen(modalElement); var focusTarget=options.focusSelector&&modalElement.querySelector(options.focusSelector);if(focusTarget)focusTarget.focus();else if(firstClose)firstClose.focus(); return modalLayer;
+  function field(definition, value) { var id = definition.id, required = definition.required ? " required" : "", span = definition.span ? " span-2" : "", input; if (definition.type === "select") input = '<select class="select" id="' + U.escape(id) + '" name="' + U.escape(id) + '"' + required + '>' + (definition.options || []).map(function (option) { var current = typeof option === "object" ? option.value : option, label = typeof option === "object" ? option.label : option; return '<option value="' + U.escape(current) + '"' + (String(current) === String(value) ? " selected" : "") + '>' + U.escape(label) + '</option>'; }).join("") + '</select>'; else if (definition.type === "textarea") input = '<textarea class="textarea" id="' + U.escape(id) + '" name="' + U.escape(id) + '" placeholder="' + U.escape(definition.placeholder || "") + '"' + required + '>' + U.escape(value || "") + '</textarea>'; else input = '<input class="input' + (definition.ltr ? " ltr" : "") + '" id="' + U.escape(id) + '" name="' + U.escape(id) + '" type="' + U.escape(definition.type || "text") + '" value="' + U.escape(value == null ? "" : value) + '" placeholder="' + U.escape(definition.placeholder || "") + '"' + (definition.min != null ? ' min="' + definition.min + '"' : "") + (definition.step != null ? ' step="' + definition.step + '"' : "") + required + '>'; input = input.replace(' id=', ' aria-describedby="' + U.escape(id) + 'FieldError" id=');
+    return '<div class="field' + span + '"><label for="' + U.escape(id) + '">' + U.escape(definition.label) + (definition.required ? " *" : "") + '</label>' + input + '<small class="field-error" id="' + U.escape(id) + 'FieldError" data-error-for="' + U.escape(id) + '"></small></div>'; }
+  function closeModal() {
+    if (!modalLayer) return;
+    modalLayer.hidden = true;
+    modalLayer.innerHTML = "";
+    var target = lastFocusedElement;
+    if (fallbackFocus && (!target || !target.isConnected || target === document.body)) target = fallbackFocus();
+    lastFocusedElement = null;
+    fallbackFocus = null;
+    if (target && target.focus) target.focus();
+  }
+  function modal(options) { if (!modalLayer) initialize(); if (modalLayer.hidden) { lastFocusedElement = document.activeElement; fallbackFocus = options.fallbackFocus; } modalLayer.innerHTML = '<section class="modal' + (options.wide ? " wide" : "") + (options.compact ? " compact" : "") + '" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><header class="modal-header"><h2 id="modalTitle">' + U.escape(options.title) + '</h2><button class="icon-button" type="button" data-modal-close aria-label="إغلاق">×</button></header><div class="modal-body">' + options.body + '</div><footer class="modal-actions">' + (options.actions || '<button class="button" type="button" data-modal-close>إغلاق</button>') + '</footer></section>'; modalLayer.hidden = false; var modalElement = modalLayer.querySelector(".modal"), firstClose = modalLayer.querySelector("[data-modal-close]"); function requestClose(){var decision=options.beforeClose?options.beforeClose():true;if(decision&&typeof decision.then==="function"){decision.then(function(ok){if(ok)closeModal();});return false;}if(decision===false)return false;closeModal();return true;} modalLayer._forceClose=closeModal; modalLayer.onclick = function (event) { if (event.target === modalLayer || event.target.closest("[data-modal-close]")) requestClose(); }; modalLayer.onkeydown = function (event) { if (event.key === "Escape") { event.preventDefault(); requestClose(); return; } if (event.key !== "Tab") return; var focusable = Array.prototype.filter.call(modalElement.querySelectorAll("button, input, select, textarea, a[href], [tabindex]"), function (element) {
+    return element.tabIndex >= 0 && !element.matches(":disabled") && element.getClientRects().length > 0 && getComputedStyle(element).visibility === "visible";
+  }); if (!focusable.length) return; var first = focusable[0], last = focusable[focusable.length - 1]; if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); } }; if (options.onOpen) options.onOpen(modalElement); var focusTarget=options.focusSelector&&modalElement.querySelector(options.focusSelector);if(focusTarget)focusTarget.focus();else if(firstClose)firstClose.focus(); return modalLayer;
   }
   function loadingModal(options) {
     if (!modalLayer) initialize();
@@ -26,7 +38,43 @@
   }
   function confirm(options) { return new Promise(function (resolve) { var accepted=false; var layer = modal({ title: options.title || "تأكيد الإجراء", body: '<p>' + U.escape(options.message) + '</p>', actions: '<button class="button ' + (options.danger ? "danger" : "primary") + '" type="button" data-confirm>' + U.escape(options.confirmText || "تأكيد") + '</button>'+(options.viewOnlyText?'<button class="button" type="button" data-view-only>'+U.escape(options.viewOnlyText)+'</button>':'')+'<button class="button" type="button" data-modal-close>إلغاء</button>', beforeClose:function(){resolve(accepted);return true;} }); layer.querySelector("[data-confirm]").onclick = function () { accepted=true;resolve(true);closeModal(); }; var viewOnly=layer.querySelector("[data-view-only]");if(viewOnly)viewOnly.onclick=function(){resolve(false);closeModal();}; }); }
 
-  function toast(message, tone) { if (!toastStack) initialize(); var item = document.createElement("div"); item.className = "toast " + (tone || "info"); item.textContent = message; toastStack.appendChild(item); setTimeout(function () { item.remove(); }, 4200); }
-  function collectForm(form, fields) { var data = {}, valid = true; fields.forEach(function (definition) { var element = form.elements[definition.id], value = element ? element.value.trim() : "", error = form.querySelector('[data-error-for="' + definition.id + '"]'); if (error) error.textContent = ""; if (definition.required && !value) { valid = false; if (error) error.textContent = "هذا الحقل مطلوب."; } if (definition.type === "number" && value !== "" && isNaN(Number(value))) { valid = false; if (error) error.textContent = "أدخل رقمًا صحيحًا."; } data[definition.id] = definition.type === "number" && value !== "" ? Number(value) : value; }); return { valid: valid, data: data }; }
-  global.AlKhayalUI = { initialize: initialize, pageHeader: pageHeader, mockBanner: mockBanner, displayLabel: displayLabel, displayError: displayError, badge: badge, chart: chart, field: field, modal: modal, loadingModal: loadingModal, closeModal: closeModal, confirm: confirm, toast: toast, collectForm: collectForm };
+  function statusIcon(tone) { return { success: "✓", warning: "⚠", danger: "!", info: "ⓘ" }[tone] || "ⓘ"; }
+  function toast(message, tone) {
+    if (!toastStack) initialize();
+    var item = document.createElement("div"), icon = document.createElement("span"), text = document.createElement("span");
+    item.className = "toast " + (tone || "info");
+    icon.className = "notice-icon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = statusIcon(tone);
+    text.textContent = message;
+    item.appendChild(icon);
+    item.appendChild(text);
+    toastStack.appendChild(item);
+    setTimeout(function () { item.remove(); }, 4200);
+  }
+
+  function setFieldError(element, error, message) {
+    if (error) error.textContent = message || "";
+    if (element) {
+      if (message) element.setAttribute("aria-invalid", "true");
+      else element.removeAttribute("aria-invalid");
+    }
+  }
+  function collectForm(form, fields) {
+    var data = {}, firstInvalid = null, valid = true;
+    fields.forEach(function (definition) {
+      var element = form.elements[definition.id], value = element ? element.value.trim() : "";
+      var error = form.querySelector('[data-error-for="' + definition.id + '"]');
+      var message = "";
+      if (definition.required && !value) message = "هذا الحقل مطلوب.";
+      if (definition.type === "number" && value !== "" && isNaN(Number(value))) message = "أدخل رقمًا صحيحًا.";
+      setFieldError(element, error, message);
+      if (message) { valid = false; firstInvalid = firstInvalid || element; }
+      data[definition.id] = definition.type === "number" && value !== "" ? Number(value) : value;
+    });
+    if (firstInvalid) firstInvalid.focus();
+    return { valid: valid, data: data };
+  }
+
+  global.AlKhayalUI = { initialize: initialize, pageHeader: pageHeader, mockBanner: mockBanner, displayLabel: displayLabel, displayError: displayError, badge: badge, chart: chart, field: field, modal: modal, loadingModal: loadingModal, closeModal: closeModal, confirm: confirm, toast: toast, setFieldError: setFieldError, collectForm: collectForm };
 }(window));

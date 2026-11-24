@@ -37,7 +37,11 @@ namespace AlKhayal.Api.Controllers
         [HttpGet, Route("")]
         // Web API's simple-string action binder rejects an explicitly empty query value.
         // Read optional search text at the HTTP boundary; Application normalizes null/whitespace.
-        public Task<IHttpActionResult> List(CancellationToken ct) => Run(false, async user => Ok(ApiEnvelope<object>.Ok(await _returns.ListAsync(Request.GetQueryNameValuePairs().FirstOrDefault(x => string.Equals(x.Key, "search", StringComparison.OrdinalIgnoreCase)).Value, ct).ConfigureAwait(false))), ct);
+        public Task<IHttpActionResult> List(CancellationToken ct, int? searchLimit = null) => Run(false, async user => Ok(ApiEnvelope<object>.Ok(await _returns.ListAsync(Request.GetQueryNameValuePairs().FirstOrDefault(x => string.Equals(x.Key, "search", StringComparison.OrdinalIgnoreCase)).Value, ct, searchLimit).ConfigureAwait(false))), ct);
+        [HttpGet, Route("page")]
+        public Task<IHttpActionResult> Page(CancellationToken ct, string search = "", long page = 1, int pageSize = 50)
+            => Run(false, async user => Ok(ApiEnvelope<object>.Ok(await _returns.ListPageAsync(search, page, pageSize, ct).ConfigureAwait(false))), ct);
+
         [HttpGet, Route("invoices")]
         public Task<IHttpActionResult> SearchInvoices(CancellationToken ct) => Run(false, async user =>
         {

@@ -27,6 +27,14 @@ namespace AlKhayal.Api.Controllers
         public Task<IHttpActionResult> List(CancellationToken ct) => Run(new[] { "accounts-list", "account-deposit", "account-withdraw", "purchase-management", "supplier-payment", "expense-add", "installment-system", "installment-payment" }, false,
             async user => Ok(ApiEnvelope<IReadOnlyList<TreasuryAccount>>.Ok(await _treasury.ListAsync(ct).ConfigureAwait(false))), ct);
 
+        [HttpGet, Route("accounts/directory-search")]
+        public Task<IHttpActionResult> SearchAccounts(CancellationToken ct, string query = "", long? id = null) =>
+            Run(new[] { "accounts-list" }, false, async user =>
+            {
+                var rows = await _treasury.SearchAccountsAsync(query, id, ct).ConfigureAwait(false);
+                return Ok(ApiEnvelope<object>.Ok(rows.Select(x => new { x.Id, x.Code, x.Name, x.Type })));
+            }, ct);
+
         [HttpGet, Route("installment-receivable")]
         public Task<IHttpActionResult> InstallmentReceivable(CancellationToken ct) => Run(new[] { "accounts-list", "installment-system", "installment-payment" }, false,
             async user => Ok(ApiEnvelope<InstallmentReceivableSummary>.Ok(await _treasury.GetInstallmentReceivableAsync(ct).ConfigureAwait(false))), ct);

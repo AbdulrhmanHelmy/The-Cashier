@@ -82,6 +82,8 @@ Maintenance is a persisted workflow behind the local API: Application validates 
 
 The frontend has no build step, framework, CDN, remote font, or service worker. It uses relative same-origin requests, stores only the CSRF token and harmless UI preferences in web storage, and targets Chromium 109 syntax and APIs.
 
+Header and Settings search both use a shared registry and record search service. Its result types map to registered routes and stable record IDs. Each input has independent keyboard and request state. See [Global Search implementation](global-search-implementation.md).
+
 ## Desktop compatibility
 
 The WinForms shell owns host lifetime, WebView2 runtime detection, application-specific browser data, navigation allowlisting, connection errors, and disposal. It starts as a standard maximized window, so Windows manages the available working area and taskbar normally. The executable and window reuse the official AlKhayal mark from `frontend/assets/alkhayal-mark.png` through the generated `src/AlKhayal.UI/Assets/alkhayal.ico` resource. It currently targets x86 because that is the runtime/native-loader combination verified on the development machine. Windows 7 requires a separately packaged Chromium 109-compatible WebView2 runtime and real-device testing; that deployment has not been qualified.

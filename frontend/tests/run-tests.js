@@ -67,6 +67,17 @@ var operationLogScreen = registry.screens.find(function (screen) { return screen
 assert.ok(operationLogScreen && operationLogScreen.administratorOnly === true && operationLogScreen.settingsGroup === "users-security" && operationLogScreen.renderer === "operation-log", "operation log must be an administrator-only Settings route with a renderer");
 registry.modules.forEach(function (module) { module.items.forEach(function (route) { assert.ok(routes.indexOf(route) >= 0, "navigation route is missing: " + route); }); });
 var sidebarRoutes = registry.modules.reduce(function(all,module){return all.concat(module.items);},[]);
+registry.modules.forEach(function (module) {
+  if (module.landingRoute) assert.ok(module.items.includes(module.landingRoute), "module landing must be one of its registered destinations");
+});
+var indexedScreens = Object.fromEntries(registry.screens.map(function (screen) { return [screen.route, screen]; }));
+var redirects = { screensByRoute: indexedScreens };
+vm.runInNewContext(appJs.match(/  function resolveRoute\(route\) \{[^\n]+/)[0], redirects);
+registry.screens.filter(function (screen) { return screen.redirectTo; }).forEach(function (screen) {
+  var destination = indexedScreens[redirects.resolveRoute(screen.route)];
+  assert.ok(screen.navigationHidden && destination && !destination.redirectTo, "compatibility route must resolve without cycles: " + screen.route);
+});
+
 assert.strictEqual(new Set(sidebarRoutes).size,sidebarRoutes.length,"main sidebar routes must not be duplicated");
 assert.equal(registry.screens.find(function(screen){return screen.route==="low-stock";}).redirectTo,"report-low-stock","legacy availability must open the persisted report");
 assert.deepStrictEqual(registry.quickAccess.map(function(item){return item.route;}),["pos","product-quick-add","purchase-management","customers-list","warehouses-list","returns-overview","accounts-list","alerts-list"],"quick access must prioritize existing daily operation routes");
@@ -115,12 +126,12 @@ assert.ok(layoutCss.indexOf("min-height: 0") >= 0 && layoutCss.indexOf("overflow
 assert.ok(layoutCss.indexOf("grid-template-columns: minmax(0, 1fr) var(--sidebar-width)") >= 0, "shell must use intrinsic grid sizing");
 assert.ok(modulesCss.indexOf("height: calc(100vh") < 0, "module layouts must not own a second viewport height");
 assert.ok(indexHtml.indexOf("toggle-icon-close") >= 0 && indexHtml.indexOf("toggle-icon-open") >= 0, "sidebar toggle must expose directional panel icons");
-assert.ok(/<div class="sidebar-brand"><span>The Cashier<\/span><\/div>/.test(indexHtml) && !/<div class="sidebar-brand">[^<]*<span class="brand-symbol/.test(indexHtml), "sidebar keeps its text label without the logo image");
+assert.ok(indexHtml.includes('class="sidebar-logo"') && indexHtml.includes('نظام إدارة الأعمال'), "sidebar displays the authentic mark and Arabic brand subtitle");
 assert.ok(layoutCss.indexOf(".quickbar.collapsed .quickbar-tiles")<0&&layoutCss.indexOf(".quickbar-menu")>=0,"quick access must use a compact overflow menu instead of a hidden state");
 assert.ok(indexHtml.indexOf("طي القائمة الجانبية") >= 0 && appJs.indexOf("توسيع القائمة الجانبية") >= 0, "sidebar toggle labels must be Arabic and state-specific");
 assert.ok(appJs.indexOf("iconPaths") >= 0 && appJs.indexOf("settings:") >= 0 && appJs.indexOf("suppliers:") >= 0, "navigation icons must use the local semantic SVG map");
 assert.ok(layoutCss.indexOf("gap: 0; padding-inline: 0") >= 0, "collapsed rail controls must remove expanded spacing");
-assert.ok(tokensCss.indexOf("--sidebar-bg")>=0&&themesCss.indexOf("--sidebar-bg")>=0&&layoutCss.indexOf("var(--sidebar-active)")>=0,"sidebar colors must use distinct light/dark semantic tokens for active and hover states");
+assert.ok(tokensCss.indexOf("--sidebar-bg")>=0&&themesCss.indexOf("--tc-sidebar-bg")>=0&&layoutCss.indexOf("var(--sidebar-active)")>=0,"sidebar colors must use distinct light/dark semantic tokens for active and hover states");
 var scaleSettingsRoute=registry.screens.find(function(screen){return screen.route==="business-activities";});
 var scaleSettingsJs=fs.readFileSync(path.join(root,"frontend/js/modules/business-activities.js"),"utf8");
 backupSettingsJs += "\n" + scaleSettingsJs;
@@ -140,8 +151,8 @@ assert.ok(featureStateJs.indexOf("/api/features/effective") >= 0 && appJs.indexO
 assert.ok(appJs.indexOf("لا تملك صلاحية فتح هذه الشاشة أو أن وحدتها معطلة") >= 0 && appJs.indexOf("reconcileAccess") >= 0, "direct routes and already-open tabs must react to disabled modules or revoked access");
 assert.ok(featureJs.indexOf("Features.load({ notify: false })") >= 0, "the feature screen must refresh state without recursively notifying the shell");
 assert.strictEqual((appJs.match(/alkhayal:features-changed/g) || []).length, 1, "the shell must register exactly one feature-state listener");
-assert.ok(/if\s*\(\s*removedActive\s*\|\|\s*!activeRoute\s*\)\s*renderActive\(\);/.test(appJs), "feature and access changes must not recreate an unaffected active screen");
-assert.ok(appJs.indexOf("return !screen.navigationHidden && routeEnabled(screen)") >= 0, "global navigation search must exclude hidden, disabled, and unauthorized routes");
+assert.ok(/if\s*\(\s*removedActive\s*\|\|\s*!activeRoute\s*\)\s*\{[^}]*renderActive\(\);/.test(appJs), "feature and access changes must not recreate an unaffected active screen");
+assert.ok(appJs.indexOf('!screen.navigationHidden && routeEnabled(screen)') >= 0, "global navigation search must exclude hidden, disabled, and unauthorized routes");
 assert.ok(registry.screens.filter(function (screen) { return screen.featureKey; }).length >= 20, "optional module routes must carry stable feature metadata");
 assert.ok(modulesCss.indexOf(".feature-grid") >= 0 && modulesCss.indexOf("@media (max-width: 760px)") >= 0, "feature settings must support compact token-driven layouts");
 assert.ok(routes.indexOf("users-list") >= 0 && indexHtml.indexOf("user-management.js") >= 0 && indexHtml.indexOf("access-state.js") >= 0, "real user management and access state must be registered");
@@ -197,7 +208,8 @@ assert.ok(catalogJs.indexOf("compactCategories")>=0&&catalogJs.indexOf("compactU
 assert.ok(catalogJs.indexOf("catalogManagementModal")>=0&&catalogJs.indexOf("+ إضافة تصنيف")>=0&&catalogJs.indexOf("+ إضافة وحدة قياس")>=0,"catalog management must expose compact modal add actions");
 assert.ok(catalogJs.indexOf("جارٍ الحفظ")>=0&&catalogJs.indexOf("تغييرات غير محفوظة")>=0&&catalogJs.indexOf("data-toggle-management")>=0,"management modals must validate, prevent duplicate saves, and protect unsaved edits");
 assert.ok(settingsHubJs.indexOf("setSelectionRange")<0&&settingsHubJs.indexOf(".focus()")<0,"settings hub search must preserve its input node naturally without a programmatic focus restore");
-assert.ok(settingsHubJs.indexOf("data-settings-results")>=0&&settingsHubJs.indexOf("query=this.value;paint();")>=0,"settings hub search must repaint only the persistent results region");
+assert.ok(settingsHubJs.includes("data-settings-results") && settingsHubJs.includes("mountSettingsSearch") &&
+  settingsHubJs.includes("data-settings-search-panel"), "Settings must retain its cards and mount the shared search panel");
 assert.ok(catalogJs.indexOf("products(screen,container,context);},220")<0&&catalogJs.indexOf("render();},180")<0,"catalog searches must not remount the whole screen from the search handler");
 assert.ok(catalogJs.indexOf('id="catalogResults"')>=0&&catalogJs.indexOf('id="categoryManagementResults"')>=0&&catalogJs.indexOf('id="unitManagementResults"')>=0,"catalog list searches must update a persistent in-place results region only");
 assert.ok(uiJs.indexOf("beforeClose")>=0&&uiJs.indexOf("focusSelector")>=0&&uiJs.indexOf("event.key === \"Escape\"")>=0,"shared modal behavior must support close guards, initial focus, Escape, and focus trapping");
@@ -398,8 +410,8 @@ function verifyCustomerManagementCreateAndEdit(){
   function fakeElement(){var element={innerHTML:"",textContent:"",value:"",hidden:false,selectors:{},classList:{add:function(){},remove:function(){},toggle:function(){},contains:function(){return false;}},querySelector:function(selector){if(!element.selectors[selector])element.selectors[selector]=fakeElement();return element.selectors[selector];},querySelectorAll:function(){return[];},addEventListener:function(){},removeEventListener:function(){},focus:function(){},setAttribute:function(){},removeAttribute:function(){},appendChild:function(child){return child;},remove:function(){},click:function(){}};return element;}
   var modalLayer=fakeElement(),toastStack=fakeElement(),apiCalls=[];
   modalLayer.selectors["#recordForm"]=fakeElement();
-  modalLayer.selectors["#recordForm"].elements=new Proxy({}, {get:function(target,key){return typeof key==="string"?{value:"CUS-900"}:undefined;}});
-  var apiStub={request:function(target,options){apiCalls.push({target:target,options:options||{}});return Promise.resolve({success:true,data:[]});}};
+  modalLayer.selectors["#recordForm"].elements=new Proxy({}, {get:function(target,key){return typeof key==="string"?Object.assign(fakeElement(),{value:"CUS-900"}):undefined;}});
+  var apiStub={request:function(target,options){apiCalls.push({target:target,options:options||{}});if(target.startsWith("/api/customers/page?")){var rows=context.window.AlKhayalMockSeed.customers;return Promise.resolve({items:rows,page:1,pageSize:50,totalCount:rows.length});}return Promise.resolve({success:true,data:[]});}};
   var documentStub={activeElement:null,getElementById:function(id){if(id==="modalLayer")return modalLayer;if(id==="toastStack")return toastStack;return null;},createElement:function(){return fakeElement();},body:{appendChild:function(){}}};
   var context={window:{},console:console,document:documentStub,localStorage:{getItem:function(){return null;},setItem:function(){}},setTimeout:function(){return 0;},clearTimeout:function(){},AlKhayalApi:apiStub};
   context.window.window=context.window;
@@ -407,9 +419,9 @@ function verifyCustomerManagementCreateAndEdit(){
   ["frontend/js/core/utils.js","frontend/js/core/calculations.js","frontend/js/mocks/data.js","frontend/js/services/mock-services.js","frontend/js/components/ui.js"].forEach(function(relative){vm.runInNewContext(fs.readFileSync(path.join(root,relative),"utf8"),context,{filename:relative});mirrorGlobals();});
   vm.runInNewContext(renderersJs,context,{filename:"renderers.js"});
   var screen=registry.screens.find(function(item){return item.route==="customers-list";});
-  var container={innerHTML:"",querySelector:function(selector){return selector==="#listSearch"?{addEventListener:function(){}}:null;},querySelectorAll:function(){return[];}};
+  var listPager=fakeElement(); var container={innerHTML:"",querySelector:function(selector){return selector==="#listSearch"?{addEventListener:function(){}}:selector==="[data-list-pagination]"?listPager:null;},querySelectorAll:function(){return[];}};
   var navigation=[];var renderContext={state:{},navigate:function(route,state){navigation.push({route:route,state:state});},canNavigate:function(){return true;},registry:registry,user:{role:"administrator"},isActive:function(){return true;}};
-  function render(){context.window.AlKhayalRenderers["entity-list"](screen,container,renderContext,true);}
+  function render(){context.window.AlKhayalRenderers["entity-list"](screen,container,renderContext,{items:context.window.AlKhayalMockSeed.customers,page:1,pageSize:50,totalCount:context.window.AlKhayalMockSeed.customers.length});}
   render();
   assert.ok(container.innerHTML.indexOf('data-list-add>+ إضافة عميل<')>=0,"customer management must expose an Arabic add-customer action");
   assert.ok(container.innerHTML.indexOf('data-row-action="edit"')>=0&&container.innerHTML.indexOf(">تعديل<")>=0,"customer management must expose an Arabic edit action for each customer");
@@ -441,7 +453,7 @@ function verifyCustomerManagementCreateAndEdit(){
     assert.strictEqual(create.length,1,"the add-customer form must save through the persisted customer API");
     assert.ok(Object.prototype.hasOwnProperty.call(JSON.parse(create[0].options.body),"secondaryPhone"),"customer create payload must include the secondary phone");
     var formElement=fakeElement();
-    formElement.elements=new Proxy({}, {get:function(target,key){return typeof key==="string"?{value:"CUS-777"}:undefined;}});
+    formElement.elements=new Proxy({}, {get:function(target,key){return typeof key==="string"?Object.assign(fakeElement(),{value:"CUS-777"}):undefined;}});
     formElement.reset=function(){};
     var addScreen=registry.screens.find(function(item){return item.route==="customer-add";});
     var formContainer={innerHTML:"",querySelector:function(selector){return selector==="#entityForm"?formElement:null;},querySelectorAll:function(){return[];}};
@@ -455,7 +467,7 @@ function verifyCustomerManagementCreateAndEdit(){
 }
 function verifyEntityListSearchKeepsFocus(){
   function fakeElement(){var element={innerHTML:"",textContent:"",value:"",listeners:{},addEventListener:function(name,handler){element.listeners[name]=handler;},querySelector:function(){return null;},querySelectorAll:function(){return[];},getAttribute:function(){return null;}};return element;}
-  var context={window:{},console:console,document:{activeElement:null,getElementById:function(id){return id==="modalLayer"||id==="toastStack"?fakeElement():null;},createElement:function(){return fakeElement();},body:{appendChild:function(){}}},localStorage:{getItem:function(){return null;},setItem:function(){}},setTimeout:setTimeout,clearTimeout:clearTimeout,AlKhayalApi:{request:function(){return Promise.resolve({success:true,data:[]});}}};
+  var context={window:{},console:console,document:{activeElement:null,getElementById:function(id){return id==="modalLayer"||id==="toastStack"?fakeElement():null;},createElement:function(){return fakeElement();},body:{appendChild:function(){}}},localStorage:{getItem:function(){return null;},setItem:function(){}},setTimeout:setTimeout,clearTimeout:clearTimeout,AlKhayalApi:{request:function(url){assert.ok(url.startsWith("/api/customers/page?"));var query=new URL(url,"http://localhost").searchParams.get("search");var rows=context.window.AlKhayalMockSeed.customers.filter(function(row){return row.name.includes(query);});return Promise.resolve({items:rows,page:1,pageSize:50,totalCount:rows.length});}}};
   context.window.window=context.window;
   function mirrorGlobals(){["AlKhayalUtils","AlKhayalCalculations","AlKhayalMockSeed","AlKhayalServices","AlKhayalUI","AlKhayalApi"].forEach(function(key){if(context[key]!==undefined)context.window[key]=context[key];});}
   ["frontend/js/core/utils.js","frontend/js/core/calculations.js","frontend/js/mocks/data.js","frontend/js/services/mock-services.js","frontend/js/components/ui.js"].forEach(function(relative){vm.runInNewContext(fs.readFileSync(path.join(root,relative),"utf8"),context,{filename:relative});mirrorGlobals();});
@@ -471,7 +483,7 @@ function verifyEntityListSearchKeepsFocus(){
   };
   var screen=registry.screens.find(function(item){return item.route==="customers-list";});
   var renderContext={state:{},navigate:function(){},canNavigate:function(){return true;},registry:registry,user:{role:"administrator"},isActive:function(){return true;}};
-  context.window.AlKhayalRenderers["entity-list"](screen,container,renderContext,true);
+  context.window.AlKhayalRenderers["entity-list"](screen,container,renderContext,{items:context.window.AlKhayalMockSeed.customers,page:1,pageSize:50,totalCount:context.window.AlKhayalMockSeed.customers.length});
   var search=container.querySelector("#listSearch"),tableHost=container.querySelector("[data-table-host]");
   assert.ok(search&&typeof search.listeners.input==="function","entity list must wire a debounced search listener on #listSearch");
   function type(text){search.value=text;search.listeners.input();return new Promise(function(resolve){setTimeout(resolve,250);});}
@@ -515,17 +527,14 @@ async function verifySearchInputFocusSurvival(){
   var renderContext={registry:registry,state:{},user:{role:"administrator",id:"admin"},canNavigate:function(){return true;},navigate:function(){},isActive:function(){return true;}};
   context.window.AlKhayalRenderers={};
   [settingsHubJs,catalogJs].forEach(function(source,index){vm.runInNewContext(source,context,{filename:"search-focus-"+index+".js"});});
-  // Settings hub: typing updates only the persistent results region.
-  var box=makeContainer({"[data-settings-search]":'data-settings-search',"[data-settings-results]":'data-settings-results'});
+  // Settings delegates its existing input to the shared search without repainting cards.
+  var box=makeContainer({"[data-settings-search]":'data-settings-search',"[data-settings-search-panel]":'data-settings-search-panel'});
+  var bound; renderContext.mountSettingsSearch=function(input,panel){bound={input:input,panel:panel};};
   context.window.AlKhayalRenderers["settings-hub"](registry.screens.find(function(item){return item.route==="settings-program";}),box.node,renderContext);
   assert.ok(box.writes()===1,"settings hub initial render must write the shell exactly once");
-  var search=box.node.querySelector("[data-settings-search]"),results=box.node.querySelector("[data-settings-results]");
-  search.value="الإعدادات";search.oninput();await flush();
-  assert.strictEqual(box.node.querySelector("[data-settings-search]"),search,"settings hub typing must not replace the search input node");
-  assert.ok(box.writes()===1,"settings hub typing must not rewrite the shell container");
-  assert.ok(results.innerHTML.indexOf("data-settings-route")>=0,"typing in the settings hub must refresh matched settings links in place");
-  search.value="نص غير موجود";search.oninput();
-  assert.ok(results.innerHTML.indexOf("data-settings-route")<0,"settings hub results must clear non-matching entries");
+  assert.strictEqual(bound.input,box.node.querySelector("[data-settings-search]"));
+  assert.strictEqual(bound.panel,box.node.querySelector("[data-settings-search-panel]"));
+  assert.ok(box.node.innerHTML.includes("data-settings-route"),"Settings retains its grouped links");
   // Product list: debounced search re-queries the persisted API and repaints only the results region.
   var box=makeContainer({"#catalogSearch":'id="catalogSearch"',"#catalogResults":'id="catalogResults"',"#catalogCategory":'id="catalogCategory"',"#catalogStatus":'id="catalogStatus"'});
   queue.length=0;calls.length=0;
@@ -595,7 +604,7 @@ async function verifySalesSearchMountedInput() {
   assert.ok(salesJs.indexOf("next.focus();next.setSelectionRange") < 0, "the POS product search must not rely on a refocus-after-redraw hack");
   var deferred = [], queue = [], requestedUrls=[];
   function buildContext() {
-    var context = { window: {}, console: console, setTimeout: setTimeout, clearTimeout: clearTimeout, URL: URL, Date: Date, BigInt: BigInt };
+    var context = { window: {}, console: console, setTimeout: setTimeout, clearTimeout: clearTimeout, URL: URL, URLSearchParams: URLSearchParams, Date: Date, BigInt: BigInt };
     context.window.window = context.window;
     vm.runInNewContext(fs.readFileSync(path.join(root, "frontend", "js", "core", "utils.js"), "utf8"), context, { filename: "utils.js" });
     context.window.AlKhayalUI = { pageHeader: function (screen, actions) { return String(actions || ""); }, toast: function () { }, badge: function (text) { return "<span>" + text + "</span>"; }, confirm: function () { return Promise.resolve(true); } };
@@ -783,20 +792,31 @@ async function verifySalesSearchMountedInput() {
   runModule(listContext);
   var listBox = makeContainer({ "#salesSearch": 'id="salesSearch"', "#salesListResults": 'id="salesListResults"' });
   queue.length = 0; deferred.length = 0;
-  queue.push({ value: [] }, { value: [{ id: 1, name: "مخزن رئيسي", isActive: true, isDefault: true }] }, { value: {} });
-  queue.push({ value: [{ id: 20, status: "posted", invoiceNumber: "S-00020", invoiceDate: "2026-10-20", customerName: "", warehouseName: "م", totalScaled: 100000, paidScaled: 100000 }] });
+  queue.push({ value: { items: [{ id: 20, status: "posted", invoiceNumber: "S-00020", invoiceDate: "2026-10-20", customerName: "", warehouseName: "م", totalScaled: 100000, paidScaled: 100000 }], page: 1, pageSize: 50, totalCount: 1 } });
   var salesListContext=Object.assign({},renderContext,{navigate:function(route,state){salesNavigation.push({route:route,state:state});}});
   listContext.window.AlKhayalRenderers["sales-invoices"](registry.screens.find(function (item) { return item.route === "sales-list"; }), listBox.node, salesListContext);
   await flush();
   var listWrites = listBox.writes(), listSearch = listBox.node.querySelector("#salesSearch"), listResults = listBox.node.querySelector("#salesListResults");
   assert.ok(listResults, "invoice history must render a dedicated results region");
-  assert.ok(listBox.innerHTML().indexOf('data-open="20"') >= 0 && listBox.innerHTML().indexOf('id="salesListResults"') >= 0, "invoice history must render its rows in a dedicated results region");
+  assert.ok(listResults.innerHTML.indexOf('data-open="20"') >= 0 && listBox.innerHTML().indexOf('id="salesListResults"') >= 0, "invoice history must render its rows in a dedicated results region");
   listSearch.value = "S-00021"; listSearch.oninput();
-  queue.push({ value: [{ id: 21, status: "posted", invoiceNumber: "S-00021", invoiceDate: "2026-10-21", customerName: "", warehouseName: "م", totalScaled: 100000, paidScaled: 100000 }] });
+  queue.push({ value: { items: [{ id: 21, status: "posted", invoiceNumber: "S-00021", invoiceDate: "2026-10-21", customerName: "", warehouseName: "م", totalScaled: 100000, paidScaled: 100000 }], page: 1, pageSize: 50, totalCount: 1 } });
   await tick(220);
   assert.ok(listBox.writes() === listWrites, "invoice-history typing must not rewrite the page container");
   assert.strictEqual(listBox.node.querySelector("#salesSearch"), listSearch, "invoice history must keep a single mounted search input");
   assert.ok(listResults.innerHTML.indexOf('data-open="21"') >= 0, "invoice-history search must refresh its own results region");
+  queue.push({ defer: true });
+  listSearch.value = "older"; listSearch.oninput();
+  await tick(220);
+  var stale = deferred[deferred.length - 1];
+  listSearch.value = "newer"; listSearch.oninput();
+  stale.resolve({items:[],page:1,pageSize:50,totalCount:0});
+  await flush();
+  assert.ok(listResults.innerHTML.includes("جارٍ تحميل"), "an older result must lose even during the debounce window");
+  queue.push({ value: {items:[],page:1,pageSize:50,totalCount:0} });
+  await tick(220);
+  assert.ok(listResults.innerHTML.includes("لا توجد فواتير مطابقة"));
+  assert.ok(requestedUrls[requestedUrls.length - 1].includes("search=newer&page=1&pageSize=50"));
   listBox.node.onclick({target:{closest:function(selector){return selector==="[data-new-sale]"?{}:null;}}});
   assert.strictEqual(salesNavigation.length,1,"New Invoice from sales history must use the registered navigation path");
   assert.strictEqual(salesNavigation[0].route,"pos","New Invoice must open Touch POS directly");
@@ -822,6 +842,7 @@ async function verifySupplierPagedSearch(){
   assert.ok(host.innerHTML.indexOf("NEW")>=0&&host.innerHTML.indexOf("OLD")<0,"late supplier results cannot overwrite the newer search");
 }
 
-Promise.all([require("./settings-cleanup-tests.js")(),require("./catalog-margin-tests.js")(),require("./backup-settings-tests.js")(),require("./customer-language-tests.js")(),require("./shift-localization-tests.js")(),require("./localization-tests.js")(),require("./delivery-tests.js")(),require("./alerts-tests.js")(),require("./touch-pos-invoice-tests.js")(),require("./report-tests.js")(),require("./pricing-fifo-tests.js")(),require("./manual-weight-tests.js")(),require("./payment-methods-tests.js")(),require("./label-tests.js")(),require("./printing-tests.js")(),require("./workforce-tests.js")(),require("./invoice-return-badges-tests.js")(),require("./returns-tests.js")(),require("./expense-tests.js")(),require("./customer-statement-tests.js")(),require("./installment-sales-tests.js")(),require("./supplier-accounts-tests.js")(),require("./purchasing-tests.js")(),require("./page-snapshot-tests.js")(),require("./treasury-tests.js")(),require("./inventory-tests.js")(),require("./operation-log-tests.js")(),require("./keyboard-shortcuts-tests.js")(),require("./workspace-tabs-tests.js")(),require("./dashboard-tests.js")(),verifyFeatureStateLifecycle(),verifyAccessStateLifecycle(),verifySettingsStateLifecycle(),verifyCustomerManagementCreateAndEdit(),verifyEntityListSearchKeepsFocus(),verifySalesSearchMountedInput(),verifySearchInputFocusSurvival(),verifySupplierPagedSearch()]).then(function () { return require("./product-units-tests.js")(); }).then(function () { console.log("Frontend registry, settings/feature/access lifecycle, user management, customer management, entity-list and settings/catalog search focus, and calculation tests passed (" + routes.length + " screens)."); }).catch(function (error) { console.error(error); process.exitCode = 1; });
+Promise.all([require("./global-search-tests.js")(),require("./settings-cleanup-tests.js")(),require("./catalog-margin-tests.js")(),require("./backup-settings-tests.js")(),require("./customer-language-tests.js")(),require("./shift-localization-tests.js")(),require("./localization-tests.js")(),require("./delivery-tests.js")(),require("./alerts-tests.js")(),require("./touch-pos-invoice-tests.js")(),require("./report-tests.js")(),require("./pricing-fifo-tests.js")(),require("./manual-weight-tests.js")(),require("./payment-methods-tests.js")(),require("./label-tests.js")(),require("./printing-tests.js")(),require("./workforce-tests.js")(),require("./invoice-return-badges-tests.js")(),require("./returns-tests.js")(),require("./expense-tests.js")(),require("./customer-statement-tests.js")(),require("./installment-sales-tests.js")(),require("./supplier-accounts-tests.js")(),require("./purchasing-tests.js")(),require("./page-snapshot-tests.js")(),require("./treasury-tests.js")(),require("./inventory-tests.js")(),require("./operation-log-tests.js")(),require("./keyboard-shortcuts-tests.js")(),require("./workspace-tabs-tests.js")(),require("./dashboard-tests.js")(),verifyFeatureStateLifecycle(),verifyAccessStateLifecycle(),verifySettingsStateLifecycle(),verifyCustomerManagementCreateAndEdit(),verifyEntityListSearchKeepsFocus(),verifySalesSearchMountedInput(),verifySearchInputFocusSurvival(),verifySupplierPagedSearch()]).then(function () { return require("./product-units-tests.js")(); }).then(function () { console.log("Frontend registry, settings/feature/access lifecycle, user management, customer management, entity-list and settings/catalog search focus, and calculation tests passed (" + routes.length + " screens)."); }).catch(function (error) { console.error(error); process.exitCode = 1; });
 
 require("./numeric-format-tests.js");
+require("./design-system-tests.js");

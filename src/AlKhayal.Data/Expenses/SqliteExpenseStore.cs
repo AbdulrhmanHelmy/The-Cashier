@@ -42,6 +42,29 @@ namespace AlKhayal.Data.Expenses
                 }
             }
         }
+        public Task<ExpenseVoucherPage> VoucherPageAsync(long page, CancellationToken ct)
+        {
+            return Task.Run(async () =>
+            {
+                const int pageSize = 50;
+                using (var c = new SQLiteConnection(_connectionString))
+                {
+                    await c.OpenAsync(ct).ConfigureAwait(false);
+                    using (var tx = c.BeginTransaction(System.Data.IsolationLevel.ReadCommitted))
+                    {
+                        var count = await c.ExecuteScalarAsync<long>(new CommandDefinition("SELECT COUNT(*) FROM ExpenseVouchers",
+                            transaction: tx, cancellationToken: ct)).ConfigureAwait(false);
+                        var currentPage = Math.Min(page, Math.Max(1, count / pageSize + (count % pageSize == 0 ? 0 : 1)));
+                        var items = (await c.QueryAsync<ExpenseVoucher>(new CommandDefinition(VoucherSql +
+                            " ORDER BY Id DESC LIMIT @Limit OFFSET @Offset", new { Limit = pageSize, Offset = (currentPage - 1) * pageSize },
+                            tx, cancellationToken: ct)).ConfigureAwait(false)).AsList();
+                        tx.Commit();
+                        return new ExpenseVoucherPage { Items = items, TotalCount = count, Page = currentPage };
+                    }
+                }
+            }, ct);
+        }
+
         public async Task<IReadOnlyList<ExpenseVoucher>> VouchersAsync(CancellationToken ct)
         {
             using (var c = new SQLiteConnection(_connectionString))
@@ -50,6 +73,31 @@ namespace AlKhayal.Data.Expenses
                 return (await c.QueryAsync<ExpenseVoucher>(new CommandDefinition(VoucherSql + " ORDER BY Id DESC LIMIT 200", cancellationToken: ct)).ConfigureAwait(false)).ToList();
             }
         }
+        public async Task<IReadOnlyList<ExpenseVoucher>> SearchVouchersAsync(string query, CancellationToken ct)
+        {
+            var like = "%" + query.Replace("!", "!!").Replace("%", "!%").Replace("_", "!_") + "%";
+            using (var c = new SQLiteConnection(_connectionString))
+            {
+                await c.OpenAsync(ct).ConfigureAwait(false);
+                var rows = await c.QueryAsync<ExpenseVoucher>(new CommandDefinition(@"
+                    SELECT Id, CategoryName, Payee FROM ExpenseVouchers
+                    WHERE printf('EXP-%06d',Id) LIKE @Like ESCAPE '!' OR Payee LIKE @Like ESCAPE '!' OR CategoryName LIKE @Like ESCAPE '!'
+                    ORDER BY CASE WHEN printf('EXP-%06d',Id)=@Query COLLATE NOCASE THEN 0 ELSE 1 END,Id DESC LIMIT 20",
+                    new { Query = query, Like = like }, cancellationToken: ct)).ConfigureAwait(false);
+                return rows.ToList();
+            }
+        }
+
+        public async Task<ExpenseVoucher> GetVoucherAsync(long id, CancellationToken ct)
+        {
+            using (var c = new SQLiteConnection(_connectionString))
+            {
+                await c.OpenAsync(ct).ConfigureAwait(false);
+                return await c.QuerySingleOrDefaultAsync<ExpenseVoucher>(
+                    new CommandDefinition(VoucherSql + " WHERE Id=@Id", new { Id = id }, cancellationToken: ct)).ConfigureAwait(false);
+            }
+        }
+
         public async Task<ExpenseVoucher> PostAsync(ExpenseCommand command, long amount, string hash, long userId, CancellationToken ct)
         {
             using (var c = new SQLiteConnection(_connectionString))

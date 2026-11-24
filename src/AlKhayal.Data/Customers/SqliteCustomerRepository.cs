@@ -15,6 +15,66 @@ namespace AlKhayal.Data.Customers
         private readonly string _connectionString;
         public SqliteCustomerRepository(string connectionString) { _connectionString = connectionString; }
 
+        private const string ArabicSearchVariants = "أإآةى";
+        private const string ArabicSearchCanonical = "اااهي";
+        private static readonly string ArabicSearchMarks = new string(Enumerable.Range(0x064B, 0x065F - 0x064B + 1).Select(x => (char)x).ToArray()) + (char)0x0670;
+        private static readonly string DirectorySearch = " WHERE " + string.Join(" OR ",
+            new[] { "Code", "Name", "Phone", "SecondaryPhone", "Address", "Status", "CAST(Balance AS TEXT)" }
+                .Select(column => NormalizeSearchColumn(column) + " LIKE @Like ESCAPE '!'"));
+
+        private static string NormalizeSearchColumn(string column)
+        {
+            for (var i = 0; i < ArabicSearchVariants.Length; i++)
+                column = "replace(" + column + ",'" + ArabicSearchVariants[i] + "','" + ArabicSearchCanonical[i] + "')";
+            foreach (var mark in ArabicSearchMarks)
+                column = "replace(" + column + ",'" + mark + "','')";
+            return column;
+        }
+
+        private static string NormalizeSearchValue(string value)
+        {
+            for (var i = 0; i < ArabicSearchVariants.Length; i++)
+                value = value.Replace(ArabicSearchVariants[i], ArabicSearchCanonical[i]);
+            return new string(value.Where(character => ArabicSearchMarks.IndexOf(character) < 0).ToArray()).Trim();
+        }
+
+        public Task<CustomerPage> ListPageAsync(string search, long page, int pageSize, string sort, bool descending, CancellationToken ct)
+        {
+            string order;
+            switch (sort)
+            {
+                case "name": order = "Name"; break;
+                case "phone": order = "Phone"; break;
+                case "balance": order = "Balance"; break;
+                case "address": order = "Address"; break;
+                case "status": order = "Status"; break;
+                default: order = "Code"; break;
+            }
+            var direction = descending ? " DESC" : " ASC";
+            return Task.Run(async () =>
+            {
+                using (var c = new SQLiteConnection(_connectionString))
+                {
+                    await c.OpenAsync(ct).ConfigureAwait(false);
+                    using (var tx = c.BeginTransaction(System.Data.IsolationLevel.ReadCommitted))
+                    {
+                        var normalized = NormalizeSearchValue(search);
+                        var source = " FROM Customers" + (normalized.Length == 0 ? "" : DirectorySearch);
+                        var like = "%" + normalized.Replace("!", "!!").Replace("%", "!%").Replace("_", "!_") + "%";
+                        var total = await c.ExecuteScalarAsync<long>(new CommandDefinition("SELECT COUNT(*)" + source,
+                            new { Like = like }, tx, cancellationToken: ct)).ConfigureAwait(false);
+                        var current = System.Math.Min(page, System.Math.Max(1, total / pageSize + (total % pageSize == 0 ? 0 : 1)));
+                        var rows = (await c.QueryAsync<Customer>(new CommandDefinition(
+                            "SELECT Id,Code,Name,Phone,SecondaryPhone,Address,Balance,CreditLimit,Subscription,Status" + source +
+                            " ORDER BY " + order + direction + ", Id" + direction + " LIMIT @Limit OFFSET @Offset",
+                            new { Like = like, Limit = pageSize, Offset = (current - 1) * pageSize }, tx, cancellationToken: ct)).ConfigureAwait(false)).AsList();
+                        tx.Commit();
+                        return new CustomerPage { Items = rows, TotalCount = total, Page = current, PageSize = pageSize };
+                    }
+                }
+            }, ct);
+        }
+
         public List<Customer> GetAll()
         {
             using (var connection = new SQLiteConnection(_connectionString))

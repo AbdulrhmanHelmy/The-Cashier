@@ -20,11 +20,11 @@ namespace AlKhayal.Api.Controllers
         public CatalogController(CatalogService catalog,AuthService auth,UserManagementService users,FeatureService features){_catalog=catalog;_auth=auth;_users=users;_features=features;}
 
         [HttpGet,Route("products")]
-        public async Task<IHttpActionResult> Products(string search=null,long? categoryId=null,bool? isActive=null,bool includeArchived=false,int page=1,int pageSize=25,CancellationToken ct=default(CancellationToken))
+        public async Task<IHttpActionResult> Products(string search=null,long? categoryId=null,bool? isActive=null,bool includeArchived=false,int page=1,int pageSize=25,CancellationToken ct=default(CancellationToken),bool directorySearch=false)
         {
             var access=await RequireAny(ct,false,false,"products-list","product-edit","installment-system").ConfigureAwait(false); if(access.Error!=null)return access.Error;
             if(includeArchived&&access.User.Role!=UserRoles.Administrator)return Content(HttpStatusCode.Forbidden,ApiEnvelope<object>.Fail("forbidden","عرض المنتجات المؤرشفة متاح لمسؤول النظام فقط."));
-            return Result(await _catalog.ListProductsAsync(new ProductQuery{Search=search,CategoryId=categoryId,IsActive=isActive,IncludeArchived=includeArchived,Page=page,PageSize=pageSize},ct).ConfigureAwait(false));
+            return Result(await _catalog.ListProductsAsync(new ProductQuery{Search=search,DirectorySearch=directorySearch,CategoryId=categoryId,IsActive=isActive,IncludeArchived=includeArchived,Page=page,PageSize=pageSize},ct).ConfigureAwait(false));
         }
 
         [HttpGet,Route("products/{id:long}")]

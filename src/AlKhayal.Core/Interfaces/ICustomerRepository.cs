@@ -7,6 +7,7 @@ namespace AlKhayal.Core.Interfaces
 {
     public interface ICustomerRepository
     {
+        Task<CustomerPage> ListPageAsync(string search, long page, int pageSize, string sort, bool descending, CancellationToken ct);
         List<Customer> GetAll();
         Task<IReadOnlyList<Customer>> SearchAsync(string query, int limit, CancellationToken ct);
         Customer GetById(long id);

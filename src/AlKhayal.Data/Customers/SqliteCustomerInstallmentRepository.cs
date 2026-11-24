@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Data.SQLite;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using AlKhayal.Core.Interfaces;
 using AlKhayal.Core.Models;
 using AlKhayal.Application.Finance;
@@ -15,6 +17,22 @@ namespace AlKhayal.Data.Customers
     {
         private readonly string _connectionString;
         public SqliteCustomerInstallmentRepository(string connectionString) { _connectionString = connectionString; }
+
+        public async Task<IReadOnlyList<CustomerInstallmentContract>> SearchAsync(string query, CancellationToken ct)
+        {
+            var like = "%" + query.Replace("!", "!!").Replace("%", "!%").Replace("_", "!_") + "%";
+            using (var c = new SQLiteConnection(_connectionString))
+            {
+                await c.OpenAsync(ct).ConfigureAwait(false);
+                var rows = await c.QueryAsync<CustomerInstallmentContract>(new CommandDefinition(@"
+                    SELECT i.Id,i.CustomerId,i.ContractNumber,c.Name CustomerName
+                    FROM CustomerInstallmentContracts i JOIN Customers c ON c.Id=i.CustomerId
+                    WHERE i.ContractNumber LIKE @Like ESCAPE '!' OR c.Name LIKE @Like ESCAPE '!' OR c.Phone LIKE @Like ESCAPE '!'
+                    ORDER BY CASE WHEN i.ContractNumber = @Query COLLATE NOCASE THEN 0 ELSE 1 END,i.Id DESC LIMIT 20",
+                    new { Query = query, Like = like }, cancellationToken: ct)).ConfigureAwait(false);
+                return rows.ToList();
+            }
+        }
 
         public CustomerInstallmentContract Create(long customerId, long productId, decimal productPrice, decimal downPayment,
             decimal interestRate, int count, int intervalMonths, string firstDueOn, decimal totalAmount,

@@ -40,13 +40,18 @@ namespace AlKhayal.Data.Catalog
             if(!string.IsNullOrWhiteSpace(query.Search))
                 where.Add("(p.Name LIKE @Search ESCAPE '\\' OR IFNULL(d.Description,'') LIKE @Search ESCAPE '\\' OR EXISTS (SELECT 1 FROM ProductSkus ps WHERE ps.ProductId=p.Id AND ps.RetiredUtc IS NULL AND ps.Sku LIKE @Search ESCAPE '\\') OR EXISTS (SELECT 1 FROM ProductBarcodes pb WHERE pb.ProductId=p.Id AND pb.RetiredUtc IS NULL AND pb.Barcode LIKE @Search ESCAPE '\\'))");
             var predicate=where.Count==0?"":" WHERE "+string.Join(" AND ",where);
-            var parameters=new { query.CategoryId, query.IsActive, Search=Like(query.Search), query.Offset, query.Limit, query.PosWarehouseId };
+            var parameters=new { query.CategoryId, query.IsActive, Search=Like(query.Search), Exact=query.Search, query.Offset, query.Limit, query.PosWarehouseId };
             using(var connection=new SQLiteConnection(_connectionString))
             {
                 await connection.OpenAsync(ct).ConfigureAwait(false);
                 var count=await connection.ExecuteScalarAsync<long>(new CommandDefinition("SELECT COUNT(*) FROM Products p JOIN ProductDetails d ON d.ProductId=p.Id"+predicate,parameters,cancellationToken:ct)).ConfigureAwait(false);
                 var select=ProductSelect;
                 var order=" ORDER BY p.Name, p.Id";
+                if (query.DirectorySearch && !string.IsNullOrWhiteSpace(query.Search))
+                    order = @" ORDER BY CASE
+                        WHEN EXISTS (SELECT 1 FROM ProductBarcodes b WHERE b.ProductId=p.Id AND b.RetiredUtc IS NULL AND b.Barcode=@Exact) THEN 0
+                        WHEN EXISTS (SELECT 1 FROM ProductSkus s WHERE s.ProductId=p.Id AND s.RetiredUtc IS NULL AND s.Sku=@Exact COLLATE NOCASE) THEN 1
+                        WHEN p.Name=@Exact COLLATE NOCASE THEN 2 ELSE 3 END,p.Name,p.Id";
                 if(query.PosWarehouseId.HasValue)
                 {
                     select=select.Replace("d.SellPriceScaled, d.PurchasePriceScaled", "COALESCE((SELECT pv.SellPriceOverrideScaled FROM ProductVariants pv WHERE pv.ProductId=p.Id AND pv.IsDefault=1 AND pv.IsActive=1 AND pv.ArchivedUtc IS NULL),d.SellPriceScaled) SellPriceScaled, d.PurchasePriceScaled");

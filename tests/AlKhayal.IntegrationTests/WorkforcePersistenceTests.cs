@@ -22,6 +22,30 @@ namespace AlKhayal.IntegrationTests
         private static WorkforceCommand Cash(long id = 0, string amount = "100", string reason = null, string direction = null) => new WorkforceCommand { Id = id, Amount = amount, Reason = reason, Direction = direction, OperationKey = Guid.NewGuid().ToString("N") };
 
         [Fact]
+        public async Task Payroll_history_and_paid_period_check_reach_records_beyond_legacy_limit()
+        {
+            using (var f = new TreasuryPersistenceTests.Fixture())
+            {
+                var employeeId = await Run(f, "employee-save", Command());
+                using (var c = f.Open())
+                {
+                    c.Execute(@"WITH RECURSIVE dated(N, Payday) AS (SELECT 0,'1980-01-01'
+                        UNION ALL SELECT N+1,date(Payday,'+1 month') FROM dated WHERE N<500)
+                        INSERT INTO EmployeePayrollPayments(EmployeeId,SalaryScaled,AdvancesScaled,NetScaled,PaidUtc,Period,ActorUserId,OperationKey)
+                        SELECT @EmployeeId,0,0,0,Payday,substr(Payday,1,7),@UserId,'history-'||N FROM dated",
+                        new { EmployeeId = employeeId, f.UserId });
+                }
+                var first = await Service(f).PayrollHistoryAsync(employeeId, "1980-01", 1, Ct);
+                var last = await Service(f).PayrollHistoryAsync(employeeId, "1980-01", 99, Ct);
+                Assert.Equal(501, first.History.Total);
+                Assert.Equal(50, first.History.Items.Count);
+                Assert.True(first.AlreadyPaid);
+                Assert.Equal(11, last.History.Page);
+                Assert.Equal("1980-01", Assert.Single(last.History.Items).Period);
+            }
+        }
+
+        [Fact]
         public async Task Name_only_optional_fields_salary_linking_edit_and_deactivation_persist_without_credentials()
         {
             using (var f = new TreasuryPersistenceTests.Fixture())
@@ -92,6 +116,10 @@ namespace AlKhayal.IntegrationTests
                 var advance = Command(); advance.EmployeeId = employeeId; advance.Amount = "100.00"; advance.TreasuryAccountId = account.Id;
                 var advanceId = await Run(f, "advance-add", advance); Assert.Equal(advanceId, await Run(f, "advance-add", advance));
                 Assert.Equal("900.00", (await f.Service.ListAsync(Ct)).Single().Balance);
+                var beforePay = await Service(f).PayrollHistoryAsync(employeeId, "2026-10", 1, Ct);
+                Assert.Equal("100.00", beforePay.PendingAdvance);
+                Assert.False(beforePay.AlreadyPaid);
+                Assert.False(Assert.Single((await Service(f).AdvanceHistoryAsync(employeeId, 1, Ct)).Items).IsSettled);
                 var payout = Command(); payout.EmployeeId = employeeId; payout.Period = "2026-10"; payout.TreasuryAccountId = account.Id;
                 var payrollId = await Run(f, "payroll-pay", payout); Assert.Equal(payrollId, await Run(f, "payroll-pay", payout));
                 Assert.Equal("0.00", (await f.Service.ListAsync(Ct)).Single().Balance);

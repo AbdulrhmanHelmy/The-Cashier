@@ -16,6 +16,7 @@ using AlKhayal.Data.Printing;
 using AlKhayal.Data.Inventory;
 using AlKhayal.Data.Sales;
 using AlKhayal.Data.Workforce;
+using AlKhayal.Printing;
 using Dapper;
 using Xunit;
 using Xunit.Abstractions;
@@ -32,6 +33,9 @@ namespace AlKhayal.IntegrationTests
             public readonly PrintingPersistenceTests.RecordingBackend Receipt = new PrintingPersistenceTests.RecordingBackend();
             public int Labels; public LabelBatch LastBatch; public LabelTemplate Template; public LabelPrinterProfile Profile; public string Error; public bool Unknown, Unsupported;
             public TaskCompletionSource<bool> Entered, Release;
+            public bool RenderLabels;
+            public byte[] CapturedLabel;
+            public string PreviewBusinessName;
             public Task<IReadOnlyList<PrinterInfo>> PrintersAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<PrinterInfo>>(new[] { new PrinterInfo { Name = "Labels", Status = "available", CustomSizeSupported = true, ActivePaper = new PrinterPaper { Name = "USER", WidthMm = 78.7m, HeightMm = 101.6m }, PrintableXmm = 1.25m, PrintableWidthMm = 75.07m, PrintableHeightMm = 101.6m, Papers = new List<PrinterPaper> { new PrinterPaper { Name = "2 x 4", WidthMm = 50.8m, HeightMm = 101.6m }, new PrinterPaper { Name = "USER", WidthMm = 78.74m, HeightMm = 101.6m } } }, new PrinterInfo { Name = "Recording" } });
             public Task ValidateAsync(PrintProfile p, PrintTemplate t, CancellationToken ct) => Receipt.ValidateAsync(p, t, ct);
             public Task SubmitAsync(PrintDocumentData d, PrintTemplate t, PrintProfile p, CancellationToken ct) => Receipt.SubmitAsync(d, t, p, ct);
@@ -40,13 +44,19 @@ namespace AlKhayal.IntegrationTests
             public Task ValidateLabelsAsync(LabelPrinterProfile p, LabelTemplate t, CancellationToken ct)
             { if (p.PrinterName != "Labels") throw new PrintException("printer_not_found", "الطابعة غير موجودة."); if (Unsupported) throw new PrintException("unsupported_paper", "مقاس غير مدعوم."); return Task.CompletedTask; }
             public async Task SubmitLabelsAsync(LabelBatch batch, LabelTemplate t, LabelPrinterProfile p, CancellationToken ct)
-            { Interlocked.Increment(ref Labels); LastBatch = batch; Template = t; Profile = p; if (Entered != null) { Entered.SetResult(true); await Release.Task; } if (Error != null) throw new PrintException(Error, "رفض الاختبار."); if (Unknown) throw new InvalidOperationException("Injected unknown submission."); }
-            public Task<byte[]> PreviewLabelsAsync(LabelBatch batch, LabelTemplate t, CancellationToken ct) => Task.FromResult(new byte[] { 137, 80, 78, 71 });
+            { Interlocked.Increment(ref Labels); LastBatch = batch; Template = t; Profile = p; if (RenderLabels) CapturedLabel = await PreviewLabelsAsync(batch, t, ct); if (Entered != null) { Entered.SetResult(true); await Release.Task; } if (Error != null) throw new PrintException(Error, "رفض الاختبار."); if (Unknown) throw new InvalidOperationException("Injected unknown submission."); }
+            public Task<byte[]> PreviewLabelsAsync(LabelBatch batch, LabelTemplate t, CancellationToken ct)
+            {
+                PreviewBusinessName = batch.Items[0].Fields["company"];
+                return RenderLabels
+                    ? new WindowsPrinterBackend(new NativePrintRenderer()).PreviewLabelsAsync(batch, t, ct)
+                    : Task.FromResult(new byte[] { 137, 80, 78, 71 });
+            }
         }
         internal static CatalogService Catalog(TreasuryPersistenceTests.Fixture f) => new CatalogService(new SqliteCatalogStore(f.ConnectionString));
-        internal static async Task<CatalogProductDetail> Product(TreasuryPersistenceTests.Fixture f, string name = "منتج ملصق", bool variants = false)
+        internal static async Task<CatalogProductDetail> Product(TreasuryPersistenceTests.Fixture f, string name = "منتج ملصق", bool variants = false, string salePrice = "12.50")
         {
-            var result = await Catalog(f).CreateProductAsync(new CreateProductCommand { OperationKey = Guid.NewGuid().ToString("N"), Name = name, BaseUnitId = 1, ProductType = "stock", SalePrice = "12.50", PurchasePrice = "8", IsActive = true, UserId = f.UserId, Configuration = variants ? new ProductConfigurationCommand { VariantMode = true, CapabilityKeys = new[] { "product-variants" }, Attributes = new[] { await CustomAttributeFixture.Create(f.ConnectionString, f.UserId) } } : null }, Ct);
+            var result = await Catalog(f).CreateProductAsync(new CreateProductCommand { OperationKey = Guid.NewGuid().ToString("N"), Name = name, BaseUnitId = 1, ProductType = "stock", SalePrice = salePrice, PurchasePrice = "8", IsActive = true, UserId = f.UserId, Configuration = variants ? new ProductConfigurationCommand { VariantMode = true, CapabilityKeys = new[] { "product-variants" }, Attributes = new[] { await CustomAttributeFixture.Create(f.ConnectionString, f.UserId) } } : null }, Ct);
             Assert.True(result.Succeeded, result.ErrorMessage); return (await Catalog(f).GetProductDetailAsync(result.Value.Id, Ct)).Value;
         }
         internal static async Task<BarcodeChangeResult> Assign(TreasuryPersistenceTests.Fixture f, CatalogProductDetail d, string code = null, long? variantId = null, long? replaceId = null, string format = "code128", string key = null)

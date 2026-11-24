@@ -82,16 +82,56 @@ namespace AlKhayal.Data.Purchasing
             }
         }
 
+        private const string PurchaseListProjection = @"SELECT EXISTS(SELECT 1 FROM PurchaseReturns pr WHERE pr.PurchaseInvoiceId=p.Id AND pr.Status='posted') HasReturns, EXISTS(SELECT 1 FROM PurchaseReturns pr WHERE pr.PurchaseInvoiceId=p.Id AND pr.Status='posted') AND NOT EXISTS(SELECT 1 FROM PurchaseInvoiceLines pl WHERE pl.PurchaseInvoiceId=p.Id AND pl.QuantityScaled>COALESCE((SELECT SUM(rl.QuantityScaled) FROM PurchaseReturnLines rl JOIN PurchaseReturns pr ON pr.Id=rl.PurchaseReturnId WHERE rl.PurchaseInvoiceLineId=pl.Id AND pr.Status='posted'),0)) IsFullyReturned,p.Id,p.SupplierId,s.Name SupplierName,p.WarehouseId,w.Name WarehouseName,p.InvoiceNumber,p.InvoiceDate,p.PaymentMode,p.TreasuryAccountId,p.TreasuryMovementId,a.Name TreasuryAccountName,p.Status,p.Notes,p.TotalScaled,p.InventoryDocumentId,p.Version,p.CreatedUtc,p.UpdatedUtc
+                    FROM PurchaseInvoices p JOIN Suppliers s ON s.Id=p.SupplierId JOIN Warehouses w ON w.Id=p.WarehouseId LEFT JOIN TreasuryAccounts a ON a.Id=p.TreasuryAccountId";
+
         public async Task<IReadOnlyList<PurchaseInvoice>> ListAsync(long? supplierId, string from, string to, CancellationToken ct)
         {
             using (var c = Open())
             {
-                var rows = (await c.QueryAsync<PurchaseInvoice>(new CommandDefinition(@"SELECT EXISTS(SELECT 1 FROM PurchaseReturns pr WHERE pr.PurchaseInvoiceId=p.Id AND pr.Status='posted') HasReturns, EXISTS(SELECT 1 FROM PurchaseReturns pr WHERE pr.PurchaseInvoiceId=p.Id AND pr.Status='posted') AND NOT EXISTS(SELECT 1 FROM PurchaseInvoiceLines pl WHERE pl.PurchaseInvoiceId=p.Id AND pl.QuantityScaled>COALESCE((SELECT SUM(rl.QuantityScaled) FROM PurchaseReturnLines rl JOIN PurchaseReturns pr ON pr.Id=rl.PurchaseReturnId WHERE rl.PurchaseInvoiceLineId=pl.Id AND pr.Status='posted'),0)) IsFullyReturned,p.Id,p.SupplierId,s.Name SupplierName,p.WarehouseId,w.Name WarehouseName,p.InvoiceNumber,p.InvoiceDate,p.PaymentMode,p.TreasuryAccountId,p.TreasuryMovementId,a.Name TreasuryAccountName,p.Status,p.Notes,p.TotalScaled,p.InventoryDocumentId,p.Version,p.CreatedUtc,p.UpdatedUtc
-                    FROM PurchaseInvoices p JOIN Suppliers s ON s.Id=p.SupplierId JOIN Warehouses w ON w.Id=p.WarehouseId LEFT JOIN TreasuryAccounts a ON a.Id=p.TreasuryAccountId
+                var rows = (await c.QueryAsync<PurchaseInvoice>(new CommandDefinition(PurchaseListProjection + @"
                     WHERE (@SupplierId IS NULL OR p.SupplierId=@SupplierId) AND (@From IS NULL OR p.InvoiceDate>=@From) AND (@To IS NULL OR p.InvoiceDate<=@To)
                     ORDER BY p.InvoiceDate DESC,p.Id DESC LIMIT 500", new { SupplierId = supplierId, From = from, To = to }, cancellationToken: ct)).ConfigureAwait(false)).ToList();
                 foreach (var row in rows) row.TotalFormatted = FormatScaled(row.TotalScaled, 4);
                 return rows;
+            }
+        }
+
+        public Task<PurchaseInvoicePage> ListPageAsync(long page, CancellationToken ct)
+        {
+            return Task.Run(async () =>
+            {
+                const int pageSize = 50;
+                using (var c = Open())
+                using (var tx = c.BeginTransaction(System.Data.IsolationLevel.ReadCommitted))
+                {
+                    var count = await c.ExecuteScalarAsync<long>(Cmd("SELECT COUNT(*) FROM PurchaseInvoices", null, tx, ct)).ConfigureAwait(false);
+                    var lastPage = Math.Max(1, count / pageSize + (count % pageSize == 0 ? 0 : 1));
+                    var currentPage = Math.Min(page, lastPage);
+                    var rows = (await c.QueryAsync<PurchaseInvoice>(Cmd(PurchaseListProjection + @"
+                        WHERE p.Id IN (SELECT Id FROM PurchaseInvoices ORDER BY InvoiceDate DESC, Id DESC LIMIT @Limit OFFSET @Offset)
+                        ORDER BY p.InvoiceDate DESC, p.Id DESC",
+                        new { Limit = pageSize, Offset = (currentPage - 1) * pageSize }, tx, ct)).ConfigureAwait(false)).AsList();
+                    foreach (var row in rows) row.TotalFormatted = FormatScaled(row.TotalScaled, 4);
+                    tx.Commit();
+                    return new PurchaseInvoicePage { Items = rows, Page = currentPage, TotalCount = count };
+                }
+            }, ct);
+        }
+
+        public async Task<IReadOnlyList<PurchaseInvoice>> SearchDirectoryAsync(string query, CancellationToken ct)
+        {
+            var like = "%" + query.Replace("!", "!!").Replace("%", "!%").Replace("_", "!_") + "%";
+            using (var c = Open())
+            {
+                var rows = await c.QueryAsync<PurchaseInvoice>(new CommandDefinition(@"
+                    SELECT p.Id,p.InvoiceNumber,s.Name SupplierName
+                    FROM PurchaseInvoices p JOIN Suppliers s ON s.Id=p.SupplierId
+                    WHERE p.InvoiceNumber LIKE @Like ESCAPE '!' OR s.Name LIKE @Like ESCAPE '!'
+                    ORDER BY CASE WHEN p.InvoiceNumber = @Query COLLATE NOCASE THEN 0 ELSE 1 END,
+                             p.InvoiceDate DESC,p.Id DESC LIMIT 20",
+                    new { Query = query, Like = like }, cancellationToken: ct)).ConfigureAwait(false);
+                return rows.ToList();
             }
         }
 

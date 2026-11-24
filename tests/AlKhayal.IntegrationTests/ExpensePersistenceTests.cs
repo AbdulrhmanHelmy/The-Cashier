@@ -19,6 +19,30 @@ namespace AlKhayal.IntegrationTests
             CategoryId = type, TreasuryAccountId = account, Amount = amount, ExpenseDate = "2026-10-28", Payee = "المستفيد", Notes = "مصروف موثق", OperationKey = key
         };
         [Fact]
+        public async Task Voucher_history_reaches_records_beyond_the_legacy_cap()
+        {
+            using (var f = new TreasuryPersistenceTests.Fixture())
+            {
+                var ct = CancellationToken.None;
+                var service = Service(f);
+                var type = await service.AddCategoryAsync(new ExpenseCategoryCommand { Name = "إيجار" }, f.UserId, ct);
+                var account = await f.Create(type: "bank");
+                await f.Post(account.Id, "1000.00");
+                for (var index = 1; index <= 201; index++)
+                    await service.PostAsync(Command(type.Id, account.Id, "1.00", "history-" + index), f.UserId, ct);
+
+                var first = await service.VoucherPageAsync(1, ct);
+                var last = await service.VoucherPageAsync(100, ct);
+                Assert.Equal(201, first.TotalCount);
+                Assert.Equal(50, first.Items.Count);
+                Assert.Equal(201, first.Items[0].Id);
+                Assert.Equal(5, last.Page);
+                Assert.Equal(1, Assert.Single(last.Items).Id);
+                Assert.Equal("799.00", Assert.Single(await f.Service.ListAsync(ct)).Balance);
+            }
+        }
+
+        [Fact]
         public async Task Categories_and_exact_vouchers_persist_with_source_snapshot_replay_and_immutable_audit()
         {
             using (var f = new TreasuryPersistenceTests.Fixture())

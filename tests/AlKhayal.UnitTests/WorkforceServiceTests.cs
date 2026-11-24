@@ -50,6 +50,8 @@ namespace AlKhayal.UnitTests
             public Task<CashierShift> ShiftAsync(long id, long? owner, CancellationToken ct) => throw new NotSupportedException();
             public Task<IReadOnlyList<ShiftEvent>> EventsAsync(long id, int page, long? owner, CancellationToken ct) => throw new NotSupportedException();
             public Task<IReadOnlyList<AttendanceAuditRecord>> AttendanceAuditAsync(long id, int page, CancellationToken ct) => throw new NotSupportedException();
+            public Task<WorkforcePage<EmployeeAdvance>> AdvanceHistoryAsync(long? employeeId, int page, CancellationToken ct) => throw new NotSupportedException();
+            public Task<PayrollHistory> PayrollHistoryAsync(long employeeId, string period, int page, CancellationToken ct) => throw new NotSupportedException();
             public Task<IReadOnlyList<EmployeeAdvance>> AdvancesAsync(long? employeeId, CancellationToken ct) => Task.FromResult<IReadOnlyList<EmployeeAdvance>>(Array.Empty<EmployeeAdvance>());
             public Task<IReadOnlyList<EmployeePayroll>> PayrollAsync(long? employeeId, CancellationToken ct) => Task.FromResult<IReadOnlyList<EmployeePayroll>>(Array.Empty<EmployeePayroll>());
         }

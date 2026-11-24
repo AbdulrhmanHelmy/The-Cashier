@@ -10,18 +10,15 @@
   };
   function icon(path){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="'+path+'"></path></svg>';}
   function render(screen,container,context){
-    var query="";
-    function registered(){var needle=U.normalize(query);return context.registry.screens.filter(function(item){return item.settingsGroup&&!item.navigationHidden&&(!item.administratorOnly||context.user.role==='administrator')&&(!needle||U.normalize(item.title+' '+item.description).indexOf(needle)>=0);}).sort(function(a,b){return(a.settingsOrder||0)-(b.settingsOrder||0);});}
+    function registered(){return context.registry.screens.filter(function(item){return item.settingsGroup&&!item.navigationHidden&&(!item.administratorOnly||context.user.role==='administrator');}).sort(function(a,b){return(a.settingsOrder||0)-(b.settingsOrder||0);});}
     function hubHtml(rows){return '<div class="settings-hub" data-settings-results>'+Object.keys(groups).map(function(key){var definition=groups[key],items=rows.filter(function(item){return item.settingsGroup===key;});if(!items.length)return '';return '<section class="settings-group card"><header class="settings-group-head"><span class="settings-group-icon">'+icon(definition.icon)+'</span><div><h2>'+definition.title+'</h2><p>'+definition.description+'</p></div></header><div class="settings-links">'+items.map(function(item){var enabled=Features.routeEnabled(item)&&context.canNavigate(item.route);return '<button type="button" class="settings-link" data-settings-route="'+U.escape(item.route)+'" '+(enabled?'':'disabled')+'><span><strong>'+U.escape(item.title)+'</strong><small>'+U.escape(item.description)+'</small></span><span class="settings-link-state '+(enabled?'success-text':'muted')+'">'+(enabled?'فتح':'غير متاح حاليًا')+'</span></button>';}).join('')+'</div></section>';}).join('')+'</div>';}
-    function shellHtml(rows){return UI.pageHeader(screen)+'<div class="settings-hub-search"><label class="field grow"><span>البحث في الإعدادات</span><input class="input" data-settings-search value="'+U.escape(query)+'" placeholder="ابحث عن إعداد أو وظيفة إدارية"></label></div>'+hubHtml(rows);}
-    function bind(){var search=container.querySelector('[data-settings-search]');if(search)search.oninput=function(){query=this.value;paint();};container.querySelectorAll('[data-settings-route]').forEach(function(button){button.onclick=function(){context.navigate(button.getAttribute('data-settings-route'));};});}
-    function paint(){
-      var target=container.querySelector('[data-settings-results]');
-      if(target){target.innerHTML=hubHtml(registered());}
-      else{container.innerHTML=shellHtml(registered());}
-      bind();
-    }
-    paint();
+    container.innerHTML = UI.pageHeader(screen) + '<div class="settings-hub-search"><label class="field grow"><span>البحث في التطبيق</span>' +
+      '<input class="input" data-settings-search autocomplete="off" maxlength="120" placeholder="ابحث عن سجل أو إعداد أو شاشة"></label>' +
+      '<div class="search-results settings-global-search-results" data-settings-search-panel hidden></div></div>' + hubHtml(registered());
+    container.querySelectorAll('[data-settings-route]').forEach(function(button){
+      button.onclick=function(){context.navigate(button.getAttribute('data-settings-route'));};
+    });
+    if (context.mountSettingsSearch) context.mountSettingsSearch(container.querySelector('[data-settings-search]'), container.querySelector('[data-settings-search-panel]'));
   }
   function legacyRedirect(screen,container,context){container.innerHTML=UI.pageHeader(screen)+'<div class="empty-state"><strong>تم توحيد الصلاحيات</strong><span>هذا مسار توافق قديم. استخدم شاشة المستخدمين والصلاحيات الجديدة.</span><br><button class="button" type="button" data-open-users>فتح المستخدمين والصلاحيات</button></div>';container.querySelector('[data-open-users]').onclick=function(){context.navigate(screen.redirectTo||'users-list');};}
   global.AlKhayalRenderers['settings-hub']=render;

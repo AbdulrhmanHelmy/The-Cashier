@@ -32,8 +32,20 @@ namespace AlKhayal.Data.Exports
             {
                 await connection.OpenAsync(ct).ConfigureAwait(false);
                 using (var pragma = new SQLiteCommand("PRAGMA query_only=ON; PRAGMA busy_timeout=5000;", connection)) pragma.ExecuteNonQuery();
-                var rows = await connection.QueryAsync(new CommandDefinition(sql, args, cancellationToken: ct)).ConfigureAwait(false);
-                return rows.Cast<object>().Select(x => new ExportRow { Values = ((IDictionary<string, object>)x).ToDictionary(p => p.Key, p => Normalize(p.Value), StringComparer.OrdinalIgnoreCase) }).ToList();
+                var rows = new List<ExportRow>();
+                using (var reader = await connection.ExecuteReaderAsync(new CommandDefinition(sql, args, cancellationToken: ct)).ConfigureAwait(false))
+                {
+                    var columns = Enumerable.Range(0, reader.FieldCount).Select(reader.GetName).ToArray();
+                    while (await reader.ReadAsync(ct).ConfigureAwait(false))
+                    {
+                        var values = new Dictionary<string, object>(columns.Length, StringComparer.OrdinalIgnoreCase);
+                        for (var ordinal = 0; ordinal < columns.Length; ordinal++)
+                            values.Add(columns[ordinal], Normalize(reader.GetValue(ordinal)));
+                        rows.Add(new ExportRow { Values = values });
+                    }
+                }
+                return rows;
+
             }
         }
 

@@ -13,7 +13,7 @@ function harness() {
     if (url.indexOf("/api/returns/invoices?") === 0) return Promise.resolve({ items: [{ id: 4, type: "sales", invoiceNumber: "S-4", invoiceDate: "2026-10-28", partyName: "عميل", total: "24.68", isEligible: true, eligibility: "partial" }, { id: 5, type: "purchase", invoiceNumber: "P-5", invoiceDate: "2026-10-27", partyName: "مورد", total: "50.00", isEligible: false, eligibility: "fully_returned" }], page: 1, pageSize: 12, totalCount: 2, totalPages: 1 });
     if (url.indexOf("/api/returns/invoice/sales/4") === 0 || url.indexOf("/api/returns/invoice/purchase/4") === 0) return Promise.resolve(invoice);
     if (url.indexOf("/api/returns/invoice?") === 0) return deferredLookup ? new Promise(function (resolve, reject) { deferredLookup.push({ resolve: resolve, reject: reject }); }) : Promise.resolve(invoice);
-    return Promise.resolve(url.indexOf("/api/returns?") === 0 ? [record] : record);
+    return Promise.resolve(url.indexOf("/api/returns/page?") === 0 ? {items:[record],page:1,pageSize:50,totalCount:1} : record);
   } } };
   vm.runInNewContext(source, { window: win, Uint8Array: Uint8Array, Date: Date }, { filename: "returns.js" });
   vm.runInNewContext(app.slice(0, app.indexOf("  function roleLabel(")) + "window.__dispatch=implementationRenderer;}());", { window: win, document: { getElementById: function () { return null; } } });

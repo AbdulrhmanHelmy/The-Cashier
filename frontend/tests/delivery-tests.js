@@ -54,13 +54,14 @@ async function testOrders(){
  var styles=fs.readFileSync(path.join(__dirname,"../css/modules.css"),"utf8"),light=fs.readFileSync(path.join(__dirname,"../css/tokens.css"),"utf8"),dark=fs.readFileSync(path.join(__dirname,"../css/themes.css"),"utf8");
  ["warning","info","success","danger"].forEach(function(tone){assert.ok(styles.includes(".delivery-order--"+tone),"status row CSS: "+tone);});
  assert.ok(styles.includes(".delivery-order:hover td")&&styles.includes(".delivery-order:focus-within td")&&styles.includes("border-inline-start"),"row tint must retain hover, keyboard focus and RTL status border");
- var palettes=[
-  ["pending","FFF5DC","936000","E2B64B","352A15","F0B849","DDA43B"],
-  ["out","E8F3FF","155F9B","66A3D8","102D4E","79C4FF","3399DA"],
-  ["delivered","E5F5EB","16764B","55B483","113C30","68DBA0","27B57A"],
-  ["failed","FDEAEA","B12C37","DD7C85","411F2A","FF949E","E45B5B"]
- ];
- palettes.forEach(function(palette){["bg","text","border"].forEach(function(part,index){var token="--delivery-"+palette[0]+"-"+part;assert.ok(light.includes(token+": #"+palette[index+1]),"Light palette "+token);assert.ok(dark.includes(token+": #"+palette[index+4]),"Dark palette "+token);assert.ok(styles.includes("var("+token+")"),"status CSS consumes "+token);});});
+ var palettes={pending:"warning",out:"info",delivered:"success",failed:"error"};
+ Object.keys(palettes).forEach(function(status){
+   ["bg","text","border"].forEach(function(part){
+     var token="--delivery-"+status+"-"+part, semantic="--tc-"+palettes[status]+(part==="bg"?"-bg":"");
+     assert.ok(light.includes(token+": var("+semantic+")"),"delivery aliases the shared theme token: "+token);
+     assert.ok(styles.includes("var("+token+")"),"status CSS consumes "+token);
+   });
+ });
  assert.ok(dark.includes(':root[data-theme="dark"]')&&fs.readFileSync(path.join(__dirname,"../js/core/theme.js"),"utf8").includes('data-theme", resolved(selected)'),"system appearance must resolve through the existing theme selector");
  assert.ok(styles.includes('delivery-order[aria-selected="true"]')&&styles.includes(".delivery-status-badge"),"selected rows and badges remain readable");
  host.onclick(event(host.querySelector("[data-next]")));assert.ok(calls[2].url.includes("page=2"));pending[2].resolve({items:[],total:26,page:2,pageSize:25});await settle();

@@ -1,4 +1,5 @@
 .printing-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-block:12px}
+.printing-actions-field-row{align-items:flex-end}
 .label-printer-assignment{border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-block:16px;background:var(--surface);min-width:0}
 .label-printer-assignment h2{margin-block:0 12px}
 .label-printer-assignment .field,.label-printer-assignment .select{min-width:0;max-width:100%}
@@ -40,4 +41,13 @@
 .receipt-record-choice:hover,.receipt-record-choice:focus-visible{background:var(--surface-2)}
 .receipt-record-choice strong,.receipt-record-choice span{overflow-wrap:anywhere}.receipt-record-choice small{grid-column:1/-1}
 .receipt-designer-grid>.printing-preview img[data-stale="true"]{opacity:.45}
+.printer-profile-modal .receipt-designer-controls>section{min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius)}
+.printer-profile-modal h3{margin-block:0 8px}
+.printer-profile-modal [data-profile-branding]{overflow-wrap:anywhere}
+.printer-profile-modal .printing-preview{max-height:min(74vh,740px)}
+.printer-profile-modal .printing-preview .printer-modal-fields{margin-block:8px}
+.printer-profile-modal .modal-actions .field-error{flex:0 0 100%;margin:0}
+.printer-profile-modal .modal-actions .field-error:empty{display:none}
+.printer-assignment-grid select{width:100%;min-width:0}
+@media(max-width:1050px){.printer-profile-modal .printing-preview{max-height:none;overflow:visible}}
 @media(max-width:760px){.modal.receipt-designer-modal{width:calc(100vw - 16px);max-height:calc(100vh - 16px)}.receipt-section-row{grid-template-columns:repeat(2,minmax(0,1fr))}}

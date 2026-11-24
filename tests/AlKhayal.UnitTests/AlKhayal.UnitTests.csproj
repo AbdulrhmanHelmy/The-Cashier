@@ -21,9 +21,13 @@
     <Compile Include="..\..\src\AlKhayal.UI\DesktopPdfOpener.cs" Link="DesktopPdfOpener.cs" />
     <Compile Include="..\..\src\AlKhayal.UI\StartupRecoveryState.cs" Link="StartupRecoveryState.cs" />
     <Compile Include="..\..\src\AlKhayal.UI\ActivationForm.cs" Link="ActivationForm.cs" />
+    <Compile Include="..\..\src\AlKhayal.UI\ActivationControls.cs" Link="ActivationControls.cs" />
     <Compile Include="..\..\src\AlKhayal.UI\ActivationSupport.cs" Link="ActivationSupport.cs" />
     <Compile Include="..\..\src\AlKhayal.UI\TrialAccessForm.cs" Link="TrialAccessForm.cs" />
     <Compile Include="..\..\src\AlKhayal.UI\WindowsLicenseInstaller.cs" Link="WindowsLicenseInstaller.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\frontend\assets\the-cashier-mark.png" LogicalName="AlKhayal.UI.Assets.the-cashier-mark.png" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="System.Drawing" />

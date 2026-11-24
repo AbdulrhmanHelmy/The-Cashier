@@ -4,6 +4,8 @@ var Element = require('./inventory-tests.js').Element;
 Element.prototype.hasAttribute = function (name) { return Object.prototype.hasOwnProperty.call(this.attrs, name); };
 Element.prototype.removeAttribute = function (name) { delete this.attrs[name]; };
 Element.prototype.addEventListener = function (name, handler) { this['on' + name] = handler; };
+Element.prototype.insertBefore = function (child, reference) { child.parent = this; this.children.splice(this.children.indexOf(reference), 0, child); return child; };
+Element.prototype.replaceWith = function (child) { child.parent = this.parent; this.parent.children[this.parent.children.indexOf(this)] = child; };
 var source = fs.readFileSync(path.join(__dirname, '../js/modules/printing.js'), 'utf8');
 assert.ok(source.includes('data-reference-barcode') && source.includes('showReferenceBarcode'), 'receipt barcode setting must reach the saved native template');
 var modules = path.join(__dirname, '../js/modules');
@@ -19,15 +21,15 @@ function harness() {
   var calls = [], pending = [], toasts = [], active = true, sequence = 0, timerId = 0, timers = {};
   var currentModal, modalOptions, win = { setTimeout:function(fn,delay){var id=++timerId;timers[id]={fn:fn,delay:delay};return id;},clearTimeout:function(id){delete timers[id];},crypto:{getRandomValues:function(bytes){bytes.fill(++sequence);}},document:{createElement:function(tag){return new Element(tag);}},AlKhayalRenderers:{},AlKhayalUtils:{escape:function(v){return String(v==null?'':v);}},AlKhayalUI:{pageHeader:function(){return '';},toast:function(message,tone){toasts.push({message:message,tone:tone});},modal:function(options){modalOptions=options;currentModal=new Element('section');currentModal.innerHTML=options.body+options.actions;options.onOpen(currentModal);return currentModal;},closeModal:function(){currentModal=null;},confirm:function(){return Promise.resolve(true);}},AlKhayalApi:{request:function(url,config){
     calls.push({url:url,config:config});
-    if(config)return new Promise(function(resolve,reject){pending.push({resolve:resolve,reject:reject});});
     if(url==='/api/printing/printers')return Promise.resolve([{name:'Recording',papers:[],capabilityNote:'تعريف اختبار'}]);
+    if(config)return new Promise(function(resolve,reject){pending.push({resolve:resolve,reject:reject});});
     if(url.indexOf('/api/printing/documents?')===0)return Promise.resolve([{id:42,reference:'SALE-42',party:'عميل محفوظ',date:'2026-11-12',amount:'125.50'}]);
     if(url==='/api/settings/company')return Promise.resolve({businessName:'متجر الاختبار',address:'القاهرة',phone:'123'});
     return Promise.resolve(defaults());
   }}};
   vm.runInNewContext(source,{window:win,Uint8Array:Uint8Array,FileReader:function(){this.readAsDataURL=function(){this.result='data:image/png;base64,iVBORw0KGgo=';this.onload();};}});
   var context={state:{},isActive:function(){return active;}};
-  return {win:win,calls:calls,pending:pending,toasts:toasts,context:context,modal:function(){return currentModal;},close:function(){if(modalOptions.beforeClose)modalOptions.beforeClose();currentModal=null;},tick:async function(maxDelay){Object.keys(timers).forEach(function(id){if(timers[id]&&timers[id].delay<=maxDelay){var task=timers[id];delete timers[id];task.fn();}});await settle();},leave:function(){active=false;},render:function(){var node=new Element('section');win.AlKhayalRenderers['native-printing']({},node,context);return node;}};
+  return {win:win,calls:calls,pending:pending,toasts:toasts,context:context,modal:function(){return currentModal;},close:function(){if(modalOptions.beforeClose)modalOptions.beforeClose();currentModal=null;},tick:async function(maxDelay){Object.keys(timers).forEach(function(id){if(timers[id]&&timers[id].delay<=maxDelay){var task=timers[id];delete timers[id];task.fn();}});await settle();},leave:function(){active=false;},render:function(viewContext){var node=new Element('section');win.AlKhayalRenderers['native-printing']({},node,viewContext||context);return node;}};
 }
 async function directPrinting() {
   var h=harness(),button=new Element('button');
@@ -46,7 +48,7 @@ async function designerAndPersistence() {
   var h=harness(),node=h.render();await settle();await settle();var host=node.querySelector('[data-printer-manager]');
   assert.ok(host.innerHTML.includes('لا توجد طابعات مضافة'),host.innerHTML);assert.ok(host.innerHTML.includes('إيصال توصيل'));
   await host.onclick({target:host.querySelector('[data-add-printer]')});var modal=h.modal();
-  assert.ok(modal.innerHTML.includes('متجر الاختبار'));assert.ok(modal.innerHTML.includes('اختر المقاس'));
+  assert.ok(modal.querySelector('[data-profile-branding]').textContent.includes('متجر الاختبار'));assert.ok(modal.innerHTML.includes('اختر المقاس'));
   modal.querySelector('[data-friendly]').value='طابعة الكاشير';modal.querySelector('[data-windows-printer]').value='Recording';
   var paper=modal.querySelector('[data-paper]');paper.value='58mm';paper.onchange();assert.equal(modal.querySelector('[data-width]').value,58);
   var logo=modal.querySelector('[data-logo]');logo.files=[{type:'image/png',size:12}];logo.onchange();assert.equal(modal.querySelector('[data-logo-preview]').hidden,false);
@@ -142,6 +144,86 @@ async function documentSpecificDesigner() {
   assert.equal(data.templates.find(function(t){return t.id===profile.templateId;}).sections.find(function(s){return s.key==='cashier';}).visible,false);
   h.pending[3].resolve(Object.assign({version:1},data));await save;
 }
-async function run(){await directPrinting();await designerAndPersistence();await livePreview();await otherPreviewControls();await documentSpecificDesigner();console.log('Native print transport, document-specific templates, live unsaved preview, logo/paper/type/branding changes, debounce, stale response, failure and cleanup tests passed.');}
+async function independentDiscovery() {
+  var h = harness(), scans = [], settingsReads = [], brandReads = [];
+  var request = h.win.AlKhayalApi.request, current = true;
+  h.context.isCurrent = function () { return current; };
+  function deferred(queue) {
+    return new Promise(function (resolve, reject) { queue.push({resolve:resolve,reject:reject}); });
+  }
+  h.win.AlKhayalApi.request = function (url, options) {
+    if (url === '/api/printing/printers') {
+      assert.equal(options.skipPageTrack, true);
+      return deferred(scans);
+    }
+    if (url === '/api/printing/settings' && !options) return deferred(settingsReads);
+    if (url === '/api/settings/company') return deferred(brandReads);
+    return request(url, options);
+  };
+  var node = h.render(), host = node.querySelector('[data-printer-manager]');
+  assert.equal(host.querySelector('[data-save-assignments]'), null);
+  var saved = defaults();
+  saved.printers.push({id:'registered',name:'مسجلة',windowsPrinterName:'Saved Device',templateId:'builtin-sale'});
+  saved.profiles.forEach(function (profile) { profile.printerId = 'registered'; });
+  settingsReads[0].resolve(saved); await settle();
+  var refresh = host.querySelector('[data-refresh-printers]');
+  assert.equal(refresh.disabled,true);
+  assert.equal(host.querySelectorAll('[data-assignment]').length,9);
+  assert.equal(scans.length,1);
+  await host.onclick({target:refresh});
+  await host.onclick({target:refresh});
+  assert.equal(scans.length,1);
+  var assignment = host.onclick({target:host.querySelector('[data-save-assignments]')});
+  assert.deepEqual(JSON.parse(h.calls[0].config.body),saved);
+  h.pending[0].reject(new Error('فشل الحفظ')); await assignment;
+  assert.equal(host.querySelector('[data-save-assignments]').disabled,false);
+
+  h.leave();
+  scans[0].reject(new Error('فشل الاكتشاف'));
+  brandReads[0].reject(new Error('فشل تحميل الهوية'));
+  await settle();
+  assert.equal(refresh.disabled,false);
+  assert.match(host.querySelector('[data-windows-status]').textContent,/فشل/);
+  assert.match(host.querySelector('[data-branding-status]').textContent,/تعذر/);
+  var retry = host.onclick({target:refresh}), duplicate = host.onclick({target:refresh});
+  await duplicate;
+  assert.equal(scans.length,2);
+  current = false;
+  var replacement = h.render({state:{},isCurrent:function () { return true; }}).querySelector('[data-printer-manager]');
+  settingsReads[1].resolve(defaults());
+  brandReads[1].resolve({businessName:'بديل'});
+  scans[1].resolve([]);
+  await retry; await settle();
+  assert.equal(scans.length,2);
+  assert.match(replacement.querySelector('[data-windows-status]').textContent,/لا توجد/);
+  assert.match(host.querySelector('[data-windows-status]').textContent,/جارٍ/);
+}
+async function rejectedProfileSaveKeepsDraft() {
+  var h = harness(), host = h.render().querySelector('[data-printer-manager]');
+  await settle();
+  function open() { return host.onclick({target:host.querySelector('[data-add-printer]')}); }
+  await open();
+  var dialog = h.modal();
+  dialog.querySelector('[data-friendly]').value = 'مسودة';
+  dialog.querySelector('[data-windows-printer]').value = 'Recording';
+  dialog.querySelector('[data-paper]').value = 'custom';
+  dialog.querySelector('[data-width]').value = '91';
+  var save = dialog.querySelector('[data-modal-save]');
+  var pendingSave = save.onclick();
+  await save.onclick();
+  assert.equal(h.pending.length,1);
+  h.pending[0].reject(new Error('رفض الحفظ'));
+  await pendingSave;
+  assert.strictEqual(h.modal(),dialog);
+  assert.equal(dialog.querySelector('[data-width]').value,'91');
+  assert.equal(dialog.querySelector('[data-friendly]').value,'مسودة');
+  assert.equal(dialog.querySelector('[data-modal-error]').textContent,'رفض الحفظ');
+  assert.equal(save.disabled,false);
+  h.close();
+  await open();
+  assert.equal(h.modal().querySelector('[data-friendly]').value,'');
+  assert.match(host.innerHTML,/لا توجد طابعات مضافة/);
+}
+async function run(){await directPrinting();await designerAndPersistence();await livePreview();await otherPreviewControls();await documentSpecificDesigner();await independentDiscovery();await rejectedProfileSaveKeepsDraft();console.log('Printer discovery staging, request deduplication, retained views, save safety and receipt preview tests passed.');}
 if(require.main===module)run().catch(function(e){console.error(e);process.exitCode=1;});
 module.exports=run;

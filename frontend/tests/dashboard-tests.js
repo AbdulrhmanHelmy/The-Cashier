@@ -60,9 +60,9 @@ module.exports = function () {
   allowed["report-overview"] = true;
   (events["alkhayal:features-changed"] || []).forEach(function (listener) { listener(); });
   assert.ok(host.innerHTML.indexOf('data-dashboard-route="report-overview"') >= 0, "feature updates refresh the mounted home");
-  assert.ok(css.indexOf("home-shortcut-grid-left") >= 0 && css.indexOf("home-shortcut-grid-right") >= 0 && css.indexOf("prefers-reduced-motion: reduce") >= 0 && css.indexOf(':root[data-theme="dark"]') >= 0, "balanced shortcut panels, motion and dark theme styles exist");
+  assert.ok(css.indexOf("home-shortcut-grid-left") >= 0 && css.indexOf("home-shortcut-grid-right") >= 0 && css.indexOf("prefers-reduced-motion: reduce") >= 0 && css.indexOf("var(--tc-bg-surface)") >= 0, "balanced shortcut panels, motion and dark theme styles exist");
   assert.ok(css.indexOf("100vh") < 0 && css.indexOf(".workspace.home-active { overflow: hidden") >= 0 && css.indexOf("pointer-events: none") >= 0, "home fills the existing workspace without a second scroll owner");
-  assert.ok(css.indexOf(".home-wordmark img { display: block; width: 100%; height: auto; object-fit: contain;") >= 0 && css.indexOf("home-frame.svg") >= 0 && css.indexOf(".home-emblem") >= 0, "wordmark uses intrinsic ratio without an offset crop and frame is scalable");
+  assert.ok(css.indexOf(".home-wordmark img { display: block; width: 100%; height: auto; object-fit: contain;") >= 0 && css.indexOf("var(--tc-home-frame)") >= 0 && css.indexOf(".home-emblem") >= 0, "wordmark uses intrinsic ratio without an offset crop and frame is scalable");
   assert.ok(host.innerHTML.indexOf("الوصول السريع") < 0, "old heading is absent");
   assert.ok(host.innerHTML.indexOf("تحديث البيانات") < 0 && app.indexOf('if (route === HOME_ROUTE) { if (fallback) fallback.remove(); return; }') >= 0 && app.indexOf('tab.route !== HOME_ROUTE') >= 0, "home has no refresh control or stale data prompt");
   console.log("Dashboard home regression tests passed.");

@@ -52,7 +52,7 @@
 
   function voucher(screen, container, context) {
     var state = context.state, draft = state.expenseDraft || (state.expenseDraft = { categoryId: "", treasuryAccountId: "", amount: "", expenseDate: today(), payee: "", notes: "", busy: false }), types = [], accounts = [];
-    container.innerHTML = UI.pageHeader(screen) + '<div class="expense-voucher-page"><section class="card expense-voucher-card"><div class="card-body expense-voucher-body" data-expense-form role="region" aria-label="تسجيل سند صرف">جارٍ تحميل الأنواع والحسابات...</div></section><section class="card expense-history-card"><div class="card-head expense-section-head"><div><h2>سندات الصرف الأخيرة</h2><p class="muted">أحدث السندات المحفوظة في النظام.</p></div><button class="button" type="button" data-vouchers-refresh>تحديث السندات</button></div><div data-expense-vouchers aria-live="polite"></div></section></div>';
+    container.innerHTML = UI.pageHeader(screen) + '<div class="expense-voucher-page"><section class="card expense-voucher-card"><div class="card-body expense-voucher-body" data-expense-form role="region" aria-label="تسجيل سند صرف">جارٍ تحميل الأنواع والحسابات...</div></section><section class="card expense-history-card"><div class="card-head expense-section-head"><div><h2>سجل سندات الصرف</h2><p class="muted">السندات المحفوظة مرتبة من الأحدث إلى الأقدم.</p></div><button class="button" type="button" data-vouchers-refresh>تحديث السندات</button></div><div data-expense-vouchers aria-live="polite"></div></section></div>';
     var host = container.querySelector("[data-expense-form]"), history = container.querySelector("[data-expense-vouchers]"), sequence = 0, historySequence = 0;
     function load() {
       var current = ++sequence;
@@ -103,17 +103,37 @@
       };
     }
     function loadHistory() {
-      var current = ++historySequence; history.innerHTML = '<div class="empty-state" role="status">جارٍ تحميل السندات...</div>';
-      Api.request("/api/expenses/vouchers").then(function (rows) {
+      var current = ++historySequence; history.onclick = null; history.innerHTML = '<div class="empty-state" role="status">جارٍ تحميل السندات...</div>';
+      var id = state.globalSearchExpenseId;
+      var result = id ? Api.request("/api/expenses/vouchers/" + id).then(function (row) {
+        if (!row || row.id !== id) throw new Error("لا يمكن فتح هذا السجل");
+        return {items:[row]};
+      }) : Api.request("/api/expenses/vouchers/page?page=" + (state.expenseHistoryPage || 1));
+      result.then(function (page) {
         if (!context.isActive() || current !== historySequence) return;
+        var rows = page.items;
         history.innerHTML = '<div class="table-wrap expense-history-wrap"><table class="data-table expense-history"><colgroup><col class="expense-voucher-number"><col class="expense-voucher-date"><col><col><col class="expense-voucher-amount"><col><col class="expense-voucher-notes"></colgroup><thead><tr><th>رقم السند</th><th>التاريخ</th><th>نوع المصروف</th><th>الخزنة / البنك</th><th>المبلغ (ج.م)</th><th>المستفيد</th><th>البيان</th></tr></thead><tbody>' + (rows.length ? rows.map(function (row) { return '<tr><td class="ltr">' + U.escape(row.number) + '</td><td class="ltr">' + U.escape(row.expenseDate) + '</td><td>' + U.escape(row.categoryName) + '</td><td>' + U.escape(row.accountName) + '</td><td class="ltr expense-money">' + U.escape(row.amount) + '</td><td>' + U.escape(row.payee || "—") + '</td><td class="expense-history-notes">' + U.escape(row.notes || "—") + '</td></tr>'; }).join("") : '<tr><td colspan="7"><div class="empty-state">لا توجد سندات صرف محفوظة.</div></td></tr>') + '</tbody></table></div>';
+        if (!id) {
+          state.expenseHistoryPage = page.page;
+          var last = Math.max(1, Math.ceil(page.totalCount / 50));
+          history.innerHTML += '<nav class="pagination invoice-pagination" aria-label="صفحات سندات الصرف"><span>صفحة ' + page.page + ' من ' + last + ' · ' + page.totalCount + ' سند</span><div class="pagination-buttons"><button class="button" type="button" data-voucher-page="' + (page.page - 1) + '"' + (page.page === 1 ? ' disabled' : '') + '>السابق</button><button class="button" type="button" data-voucher-page="' + (page.page + 1) + '"' + (page.page === last ? ' disabled' : '') + '>التالي</button></div></nav>';
+          history.onclick = function (event) {
+            var button = event.target.closest("[data-voucher-page]");
+            if (!button || button.disabled) return;
+            state.expenseHistoryPage = Number(button.getAttribute("data-voucher-page"));
+            loadHistory();
+          };
+        }
       }).catch(function (reason) {
         if (!context.isActive() || current !== historySequence) return;
         history.innerHTML = '<div class="empty-state">' + U.escape(reason.message) + '<button class="button" data-vouchers-retry>إعادة المحاولة</button></div>';
         history.querySelector("[data-vouchers-retry]").onclick = loadHistory;
       });
     }
-    container.querySelector("[data-vouchers-refresh]").onclick = loadHistory;
+    container.querySelector("[data-vouchers-refresh]").onclick = function () {
+      delete state.globalSearchExpenseId;
+      loadHistory();
+    };
     load(); loadHistory();
   }
   R["expense-categories"] = categories;

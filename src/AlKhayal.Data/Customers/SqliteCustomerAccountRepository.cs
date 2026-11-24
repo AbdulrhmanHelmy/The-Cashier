@@ -149,6 +149,69 @@ namespace AlKhayal.Data.Customers
             }
         }
 
+        private sealed class PeriodTotals
+        {
+            public long Count { get; set; }
+            public long Debit { get; set; }
+            public long Credit { get; set; }
+        }
+
+        public CustomerStatement GetStatementPage(long customerId, string from, string to, long page, int pageSize, System.Threading.CancellationToken ct)
+        {
+            using (var c = new SQLiteConnection(_connectionString))
+            {
+                c.Open();
+                using (var tx = c.BeginTransaction(System.Data.IsolationLevel.ReadCommitted))
+                {
+                    var customer = c.QuerySingleOrDefault<Customer>(new CommandDefinition(
+                        "SELECT Id, Name, CreditLimit FROM Customers WHERE Id=@Id", new { Id = customerId }, tx, cancellationToken: ct));
+                    if (customer == null) return null;
+                    var args = new { Id = customerId, From = string.IsNullOrWhiteSpace(from) ? null : from, To = string.IsNullOrWhiteSpace(to) ? null : to };
+                    const string signed = "CASE WHEN TransactionType IN ('opening','increase') THEN AmountScaled ELSE -AmountScaled END";
+                    const string ledger = " FROM CustomerTransactions WHERE CustomerId=@Id";
+                    const string period = ledger + " AND (@From IS NULL OR OccurredOn>=@From) AND (@To IS NULL OR OccurredOn<=@To)";
+                    var opening = c.ExecuteScalar<long>(new CommandDefinition("SELECT COALESCE(SUM(" + signed + "),0)" + ledger +
+                        " AND OccurredOn<@From", args, tx, cancellationToken: ct));
+                    var current = c.ExecuteScalar<long>(new CommandDefinition("SELECT COALESCE(SUM(" + signed + "),0)" + ledger,
+                        args, tx, cancellationToken: ct));
+                    var totals = c.QuerySingle<PeriodTotals>(new CommandDefinition(
+                        @"SELECT COUNT(*) Count, COALESCE(SUM(CASE WHEN TransactionType IN ('opening','increase') THEN AmountScaled END),0) Debit,
+                          COALESCE(SUM(CASE WHEN TransactionType NOT IN ('opening','increase') THEN AmountScaled END),0) Credit" + period,
+                        args, tx, cancellationToken: ct));
+                    var selectedPage = Math.Min(page, Math.Max(1, totals.Count / pageSize + (totals.Count % pageSize == 0 ? 0 : 1)));
+                    var rows = c.Query<LedgerRow>(new CommandDefinition(
+                        "SELECT Id,TransactionType Type,AmountScaled,OccurredOn,Notes,Reference" + period +
+                        " ORDER BY OccurredOn,Id LIMIT @Limit OFFSET @Offset",
+                        new { args.Id, args.From, args.To, Limit = pageSize, Offset = (selectedPage - 1) * pageSize }, tx, cancellationToken: ct)).AsList();
+                    var running = opening;
+                    if (selectedPage > 1 && rows.Count > 0)
+                    {
+                        var first = rows[0];
+                        running = checked(running + c.ExecuteScalar<long>(new CommandDefinition("SELECT COALESCE(SUM(" + signed + "),0)" + period +
+                            " AND (OccurredOn,Id)<(@FirstDate,@FirstId)",
+                            new { args.Id, args.From, args.To, FirstDate = first.OccurredOn, FirstId = first.Id }, tx, cancellationToken: ct)));
+                    }
+                    var statement = new CustomerStatement
+                    {
+                        CustomerId = customerId, CustomerName = customer.Name, CreditLimit = customer.CreditLimit,
+                        From = args.From, To = args.To, OpeningBalance = opening / 10000m, CurrentBalance = current / 10000m,
+                        TotalDebit = totals.Debit / 10000m, TotalCredit = totals.Credit / 10000m,
+                        ClosingBalance = (opening / 10000m) + (totals.Debit / 10000m) - (totals.Credit / 10000m),
+                        Page = selectedPage, PageSize = pageSize, TotalCount = totals.Count
+                    };
+                    if (selectedPage == 1)
+                        statement.Movements.Add(new CustomerStatementMovement { Date = args.From ?? "—", Description = "رصيد افتتاحي", Balance = statement.OpeningBalance, Kind = "opening" });
+                    foreach (var row in rows)
+                    {
+                        running = checked(running + Signed(row));
+                        statement.Movements.Add(ToMovement(row, running));
+                    }
+                    tx.Commit();
+                    return statement;
+                }
+            }
+        }
+
         private static CustomerStatement GetLedgerStatement(SQLiteConnection connection,Customer customer,string from,string to)
         {
             DateTime fromDate,toDate;var hasFrom=DateTime.TryParseExact(from,"yyyy-MM-dd",CultureInfo.InvariantCulture,DateTimeStyles.None,out fromDate);var hasTo=DateTime.TryParseExact(to,"yyyy-MM-dd",CultureInfo.InvariantCulture,DateTimeStyles.None,out toDate);
@@ -160,10 +223,16 @@ namespace AlKhayal.Data.Customers
             {
                 var add=row.Type=="opening"||row.Type=="increase";running=checked(running+Signed(row));var amount=row.AmountScaled/10000m;
                 if(add)statement.TotalDebit+=amount;else statement.TotalCredit+=amount;
-                var description=row.Notes!=null&&row.Notes.StartsWith("بيع بالتقسيط",StringComparison.Ordinal)?"بيع بالتقسيط":row.Notes!=null&&row.Notes.StartsWith("مقدم بيع بالتقسيط",StringComparison.Ordinal)?"مقدم بيع بالتقسيط":row.Notes!=null&&row.Notes.StartsWith("سداد القسط رقم ",StringComparison.Ordinal)?row.Notes:row.Notes!=null&&row.Notes.StartsWith("صيانة رقم ",StringComparison.Ordinal)?"صيانة وخدمة":row.Notes!=null&&row.Notes.StartsWith("مقدم صيانة رقم ",StringComparison.Ordinal)?"مقدم صيانة":row.Notes!=null&&row.Notes.StartsWith("سداد صيانة نقدي رقم ",StringComparison.Ordinal)?"سداد صيانة نقدي":row.Type=="reduction"&&row.Notes!=null&&row.Notes.StartsWith("إلغاء فاتورة بيع",StringComparison.Ordinal)?"إلغاء فاتورة بيع":Description(row.Type,row.Reference);
-                statement.Movements.Add(new CustomerStatementMovement{TransactionId=row.Id,Date=row.OccurredOn,Reference=row.Reference,Notes=row.Notes,Description=description,Debit=add?amount:0,Credit=add?0:amount,Balance=running/10000m,Kind=row.Type});
+                statement.Movements.Add(ToMovement(row, running));
             }
             statement.ClosingBalance=running/10000m;return statement;
+        }
+        private static CustomerStatementMovement ToMovement(LedgerRow row, long running)
+        {
+            var add = row.Type == "opening" || row.Type == "increase";
+            var amount = row.AmountScaled / 10000m;
+            var description=row.Notes!=null&&row.Notes.StartsWith("بيع بالتقسيط",StringComparison.Ordinal)?"بيع بالتقسيط":row.Notes!=null&&row.Notes.StartsWith("مقدم بيع بالتقسيط",StringComparison.Ordinal)?"مقدم بيع بالتقسيط":row.Notes!=null&&row.Notes.StartsWith("سداد القسط رقم ",StringComparison.Ordinal)?row.Notes:row.Notes!=null&&row.Notes.StartsWith("صيانة رقم ",StringComparison.Ordinal)?"صيانة وخدمة":row.Notes!=null&&row.Notes.StartsWith("مقدم صيانة رقم ",StringComparison.Ordinal)?"مقدم صيانة":row.Notes!=null&&row.Notes.StartsWith("سداد صيانة نقدي رقم ",StringComparison.Ordinal)?"سداد صيانة نقدي":row.Type=="reduction"&&row.Notes!=null&&row.Notes.StartsWith("إلغاء فاتورة بيع",StringComparison.Ordinal)?"إلغاء فاتورة بيع":Description(row.Type,row.Reference);
+            return new CustomerStatementMovement{TransactionId=row.Id,Date=row.OccurredOn,Reference=row.Reference,Notes=row.Notes,Description=description,Debit=add?amount:0,Credit=add?0:amount,Balance=running/10000m,Kind=row.Type};
         }
         private sealed class LedgerRow{public long Id{get;set;}public string Type{get;set;}public long AmountScaled{get;set;}public string OccurredOn{get;set;}public string Notes{get;set;}public string Reference{get;set;}}
         private sealed class StoredPostingRow{public long Id{get;set;}public long CustomerId{get;set;}public string Type{get;set;}public long AmountScaled{get;set;}public string OccurredOn{get;set;}public string Notes{get;set;}public string Reference{get;set;}public long? SalesInvoiceId{get;set;}public long? SalesReturnId{get;set;}public string RequestHash{get;set;}public string OperationKey{get;set;}}

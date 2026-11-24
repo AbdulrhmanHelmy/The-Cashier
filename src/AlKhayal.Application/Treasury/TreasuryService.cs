@@ -71,6 +71,7 @@ namespace AlKhayal.Application.Treasury
     public interface ITreasuryStore
     {
         Task<IReadOnlyList<TreasuryAccount>> ListAsync(CancellationToken ct);
+        Task<IReadOnlyList<TreasuryAccount>> SearchAccountsAsync(string query, long? id, CancellationToken ct);
         Task<InstallmentReceivableSummary> GetInstallmentReceivableAsync(CancellationToken ct);
         Task<TreasuryAccount> SaveAsync(long? id, TreasuryAccountCommand command, string normalizedCode, long userId, CancellationToken ct);
         Task DeleteAsync(long id, long version, long userId, CancellationToken ct);
@@ -109,6 +110,13 @@ namespace AlKhayal.Application.Treasury
         private readonly ITreasuryStore _store;
         public TreasuryService(ITreasuryStore store) { _store = store; }
         public Task<IReadOnlyList<TreasuryAccount>> ListAsync(CancellationToken ct) => _store.ListAsync(ct);
+        public Task<IReadOnlyList<TreasuryAccount>> SearchAccountsAsync(string query, long? id, CancellationToken ct)
+        {
+            query = (query ?? "").Trim();
+            if ((query.Length == 0 && !id.HasValue) || query.Length > 120 || id <= 0)
+                throw new ArgumentException("أدخل عبارة بحث صالحة.");
+            return _store.SearchAccountsAsync(query, id, ct);
+        }
         public Task<InstallmentReceivableSummary> GetInstallmentReceivableAsync(CancellationToken ct) => _store.GetInstallmentReceivableAsync(ct);
         public Task<TreasuryAccount> SaveAsync(long? id, TreasuryAccountCommand command, long userId, CancellationToken ct)
         {

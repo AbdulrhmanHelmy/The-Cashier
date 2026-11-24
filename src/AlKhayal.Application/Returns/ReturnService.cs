@@ -128,9 +128,18 @@ namespace AlKhayal.Application.Returns
         public int TotalCount { get; set; }
         public int TotalPages => TotalCount == 0 ? 0 : (TotalCount + PageSize - 1) / PageSize;
     }
+    public sealed class ReturnHistoryPage
+    {
+        public IReadOnlyList<ReturnRecord> Items { get; set; }
+        public long Page { get; set; }
+        public int PageSize { get; set; }
+        public long TotalCount { get; set; }
+    }
+
     public interface IReturnReadStore
     {
-        Task<IReadOnlyList<ReturnRecord>> ListAsync(string search, CancellationToken ct);
+        Task<ReturnHistoryPage> ListPageAsync(string search, long page, int pageSize, CancellationToken ct);
+        Task<IReadOnlyList<ReturnRecord>> ListAsync(string search, CancellationToken ct, int? searchLimit = null);
         Task<ReturnRecord> GetAsync(string type, long id, CancellationToken ct);
         Task<long?> FindInvoiceAsync(string type, string number, CancellationToken ct);
         Task<bool> InvoiceExistsAsync(string type, long id, CancellationToken ct);
@@ -144,7 +153,14 @@ namespace AlKhayal.Application.Returns
         private readonly SalesService _sales;
         private readonly PurchaseService _purchases;
         public ReturnService(IReturnReadStore store, SalesService sales, PurchaseService purchases) { _store = store; _sales = sales; _purchases = purchases; }
-        public Task<IReadOnlyList<ReturnRecord>> ListAsync(string search, CancellationToken ct) => _store.ListAsync((search ?? "").Trim(), ct);
+        public Task<ReturnHistoryPage> ListPageAsync(string search, long page, int pageSize, CancellationToken ct)
+        {
+            if (page < 1 || (pageSize != 25 && pageSize != 50 && pageSize != 100 && pageSize != 200))
+                throw new ArgumentException("رقم الصفحة أو عدد المرتجعات في الصفحة غير صالح.");
+            return _store.ListPageAsync((search ?? "").Trim(), page, pageSize, ct);
+        }
+
+        public Task<IReadOnlyList<ReturnRecord>> ListAsync(string search, CancellationToken ct, int? searchLimit = null) => _store.ListAsync((search ?? "").Trim(), ct, searchLimit.HasValue ? Math.Max(1, Math.Min(20, searchLimit.Value)) : (int?)null);
         public Task<ReturnInvoicePickerPage> SearchInvoicesAsync(ReturnInvoicePickerQuery query, CancellationToken ct)
         {
             query = query ?? new ReturnInvoicePickerQuery();

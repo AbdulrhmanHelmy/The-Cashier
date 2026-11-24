@@ -20,7 +20,14 @@ namespace AlKhayal.Application.Sales
         public Task<SaleInvoice> GetAsync(long id,CancellationToken ct) { return _store.GetAsync(id,ct); }
         public Task<SaleInvoice> GetForEditAsync(long id,long userId,CancellationToken ct)
         { return _store.GetForEditAsync(id,userId,DateTime.Now.ToString("yyyy-MM-dd",CultureInfo.InvariantCulture),ct); }
-        public Task<System.Collections.Generic.IReadOnlyList<SaleInvoice>> ListAsync(string search,string from,string to,CancellationToken ct) { ValidateDate(from);ValidateDate(to);if(from!=null&&to!=null&&string.CompareOrdinal(from,to)>0)throw new ArgumentException("تاريخ البداية يجب ألا يكون بعد تاريخ النهاية.");return _store.ListAsync(search,from,to,ct); }
+        public Task<SaleInvoicePage> ListPageAsync(string search, long page, int pageSize, CancellationToken ct)
+        {
+            if (page < 1 || (pageSize != 25 && pageSize != 50 && pageSize != 100 && pageSize != 200))
+                throw new ArgumentException("رقم الصفحة أو عدد الفواتير في الصفحة غير صالح.");
+            return _store.ListPageAsync(search, page, pageSize, ct);
+        }
+
+        public Task<System.Collections.Generic.IReadOnlyList<SaleInvoice>> ListAsync(string search,string from,string to,CancellationToken ct,int? searchLimit=null) { ValidateDate(from);ValidateDate(to);if(from!=null&&to!=null&&string.CompareOrdinal(from,to)>0)throw new ArgumentException("تاريخ البداية يجب ألا يكون بعد تاريخ النهاية.");return _store.ListAsync(search,from,to,ct,searchLimit.HasValue?Math.Max(1,Math.Min(20,searchLimit.Value)):(int?)null); }
         public Task<long> CountSuspendedAsync(CancellationToken ct) { return _store.CountSuspendedAsync(ct); }
         public async Task<SalePostResult> PostAsync(long id,string key,long userId,CancellationToken ct)
         { if(id<=0||userId<=0||string.IsNullOrWhiteSpace(key)||key.Length>120)return SalePostResult.Fail("invalid_operation","مفتاح العملية غير صالح.");var invoice=await _store.GetAsync(id,ct).ConfigureAwait(false);if(invoice==null)return null;return await _store.PostAsync(id,invoice.Version,key.Trim(),Hash(invoice,key.Trim(),userId),userId,ct).ConfigureAwait(false); }

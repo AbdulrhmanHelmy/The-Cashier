@@ -88,8 +88,8 @@ namespace AlKhayal.Data.Workforce
                     var employee = await c.QuerySingleOrDefaultAsync<Employee>(Cmd("SELECT * FROM Employees WHERE Id=@EmployeeId AND IsActive=1", new { x.EmployeeId }, tx, ct)).ConfigureAwait(false);
                     if (employee == null || !employee.SalaryScaled.HasValue || employee.SalaryFrequency != "monthly") throw Conflict("الموظف غير نشط أو لم يُحدد له راتب شهري.");
                     if (await c.ExecuteScalarAsync<long>(Cmd("SELECT COUNT(*) FROM TreasuryAccounts WHERE Id=@TreasuryAccountId AND IsDeleted=0", new { x.TreasuryAccountId }, tx, ct)).ConfigureAwait(false) != 1) throw Conflict("الخزنة أو البنك المحدد غير موجود.");
-                    if (await c.ExecuteScalarAsync<long>(Cmd("SELECT COUNT(*) FROM EmployeePayrollPayments WHERE EmployeeId=@EmployeeId AND Period=@Period", new { x.EmployeeId, x.Period }, tx, ct)).ConfigureAwait(false) != 0) throw Conflict("تم صرف راتب الموظف عن هذه الفترة بالفعل.");
-                    var advances = await c.ExecuteScalarAsync<long>(Cmd("SELECT COALESCE(SUM(a.AmountScaled),0) FROM EmployeeAdvances a WHERE a.EmployeeId=@EmployeeId AND NOT EXISTS(SELECT 1 FROM EmployeePayrollAdvanceAllocations l WHERE l.AdvanceId=a.Id)", new { x.EmployeeId }, tx, ct)).ConfigureAwait(false);
+                    if (await c.ExecuteScalarAsync<long>(Cmd(PaidPeriod, new { x.EmployeeId, x.Period }, tx, ct)).ConfigureAwait(false) != 0) throw Conflict("تم صرف راتب الموظف عن هذه الفترة بالفعل.");
+                    var advances = await c.ExecuteScalarAsync<long>(Cmd(UnsettledAdvanceTotal, new { x.EmployeeId }, tx, ct)).ConfigureAwait(false);
                     if (advances > employee.SalaryScaled.Value) throw Conflict("إجمالي السلف يتجاوز الراتب. راجع السلف قبل الصرف.");
                     var netPay = employee.SalaryScaled.Value - advances;
                     var treasuryMovementId = (long?)null;
@@ -204,10 +204,11 @@ namespace AlKhayal.Data.Workforce
         public Task<WorkforcePage<CashierShift>> ShiftsAsync(WorkforceQuery q, long? ownerId, CancellationToken ct)
         {
             const string where = @" WHERE (@owner IS NULL OR s.CashierId=@owner) AND (@cashier IS NULL OR s.CashierId=@cashier)
+                AND (@search='' OR ('SHIFT-' || s.Id)=@search COLLATE NOCASE OR CAST(s.Id AS TEXT)=@search OR instr(u.DisplayName,@search)>0)
                 AND (@from IS NULL OR s.OpenedUtc>=@from) AND (@to IS NULL OR s.OpenedUtc<@to)
                 AND (@status='' OR (@status='open' AND s.ClosedUtc IS NULL) OR (@status='closed' AND s.ClosedUtc IS NOT NULL))
                 AND (@discrepancies=0 OR (s.ClosedUtc IS NOT NULL AND s.CountedScaled<>s.ClosingExpectedScaled))";
-            return PageAsync<CashierShift>(ShiftSql, "CashierShifts s", where, q, ownerId, "s.OpenedUtc DESC,s.Id DESC", ct);
+            return PageAsync<CashierShift>(ShiftSql, "CashierShifts s JOIN Users u ON u.Id=s.CashierId", where, q, ownerId, "s.OpenedUtc DESC,s.Id DESC", ct);
         }
         private async Task<WorkforcePage<T>> PageAsync<T>(string select, string from, string where, WorkforceQuery q, long? ownerId, string order, CancellationToken ct)
         {
@@ -261,6 +262,60 @@ namespace AlKhayal.Data.Workforce
         {
             using (var c = await OpenAsync(ct).ConfigureAwait(false)) return (await c.QueryAsync<AttendanceAuditRecord>(Cmd("SELECT Action,ActorUserId,Detail,CreatedUtc FROM WorkforceAudit WHERE EntityId=@id AND Action IN ('attendance-in','attendance-out','attendance-correct','attendance-break') ORDER BY Id DESC LIMIT 50 OFFSET @offset", new { id, offset = (page - 1) * 50 }, null, ct)).ConfigureAwait(false)).ToList();
         }
+        private const string UnsettledAdvanceTotal = @"SELECT COALESCE(SUM(a.AmountScaled),0) FROM EmployeeAdvances a
+            WHERE a.EmployeeId=@EmployeeId AND NOT EXISTS(SELECT 1 FROM EmployeePayrollAdvanceAllocations l WHERE l.AdvanceId=a.Id)";
+        private const string PaidPeriod = "SELECT COUNT(*) FROM EmployeePayrollPayments WHERE EmployeeId=@EmployeeId AND Period=@Period";
+
+        public Task<WorkforcePage<EmployeeAdvance>> AdvanceHistoryAsync(long? employeeId, int page, CancellationToken ct)
+        {
+            return Task.Run(async () =>
+            {
+                using (var c = await OpenAsync(ct).ConfigureAwait(false))
+                using (var tx = c.BeginTransaction(System.Data.IsolationLevel.ReadCommitted))
+                {
+                    var result = await HistoryPage<EmployeeAdvance>(c, tx, employeeId, page,
+                        @"SELECT a.Id,a.EmployeeId,e.Name EmployeeName,a.AmountScaled,a.CreatedUtc,a.Notes,a.TreasuryMovementId,
+                            EXISTS(SELECT 1 FROM EmployeePayrollAdvanceAllocations l WHERE l.AdvanceId=a.Id) IsSettled",
+                        " FROM EmployeeAdvances a JOIN Employees e ON e.Id=a.EmployeeId",
+                        "a.EmployeeId", "a.CreatedUtc DESC,a.Id DESC", ct).ConfigureAwait(false);
+                    tx.Commit();
+                    return result;
+                }
+            }, ct);
+        }
+
+        public Task<PayrollHistory> PayrollHistoryAsync(long employeeId, string period, int page, CancellationToken ct)
+        {
+            return Task.Run(async () =>
+            {
+                using (var c = await OpenAsync(ct).ConfigureAwait(false))
+                using (var tx = c.BeginTransaction(System.Data.IsolationLevel.ReadCommitted))
+                {
+                    var args = new { EmployeeId = employeeId, Period = period };
+                    var pending = await c.ExecuteScalarAsync<long>(Cmd(UnsettledAdvanceTotal, args, tx, ct)).ConfigureAwait(false);
+                    var paid = await c.ExecuteScalarAsync<long>(Cmd(PaidPeriod, args, tx, ct)).ConfigureAwait(false);
+                    var history = await HistoryPage<EmployeePayroll>(c, tx, employeeId, page,
+                        @"SELECT p.Id,p.EmployeeId,e.Name EmployeeName,p.SalaryScaled,p.AdvancesScaled,p.NetScaled,p.PaidUtc,p.Period,p.TreasuryMovementId",
+                        " FROM EmployeePayrollPayments p JOIN Employees e ON e.Id=p.EmployeeId",
+                        "p.EmployeeId", "p.PaidUtc DESC,p.Id DESC", ct).ConfigureAwait(false);
+                    tx.Commit();
+                    return new PayrollHistory { History = history, PendingAdvanceScaled = pending, AlreadyPaid = paid != 0 };
+                }
+            }, ct);
+        }
+
+        private static async Task<WorkforcePage<T>> HistoryPage<T>(SQLiteConnection c, SQLiteTransaction tx, long? employeeId,
+            int page, string projection, string source, string employeeColumn, string orderBy, CancellationToken ct)
+        {
+            const int pageSize = 50;
+            if (employeeId.HasValue) source += " WHERE " + employeeColumn + "=@EmployeeId";
+            var total = await c.ExecuteScalarAsync<long>(Cmd("SELECT COUNT(*)" + source, new { EmployeeId = employeeId }, tx, ct)).ConfigureAwait(false);
+            var current = (int)Math.Min(page, Math.Max(1, (total + pageSize - 1) / pageSize));
+            var rows = (await c.QueryAsync<T>(Cmd(projection + source + " ORDER BY " + orderBy + " LIMIT @Limit OFFSET @Offset",
+                new { EmployeeId = employeeId, Limit = pageSize, Offset = ((long)current - 1) * pageSize }, tx, ct)).ConfigureAwait(false)).AsList();
+            return new WorkforcePage<T> { Items = rows, Total = total, Page = current, PageSize = pageSize };
+        }
+
         public async Task<IReadOnlyList<EmployeeAdvance>> AdvancesAsync(long? employeeId, CancellationToken ct)
         {
             using (var c = await OpenAsync(ct).ConfigureAwait(false)) return (await c.QueryAsync<EmployeeAdvance>(Cmd("SELECT a.Id,a.EmployeeId,e.Name EmployeeName,a.AmountScaled,a.CreatedUtc,a.Notes,a.TreasuryMovementId,EXISTS(SELECT 1 FROM EmployeePayrollAdvanceAllocations l WHERE l.AdvanceId=a.Id) IsSettled FROM EmployeeAdvances a JOIN Employees e ON e.Id=a.EmployeeId WHERE (@employeeId IS NULL OR a.EmployeeId=@employeeId) ORDER BY a.CreatedUtc DESC,a.Id DESC LIMIT 500", new { employeeId }, null, ct)).ConfigureAwait(false)).ToList();

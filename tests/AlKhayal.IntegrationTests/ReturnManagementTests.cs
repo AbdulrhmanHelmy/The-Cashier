@@ -57,6 +57,10 @@ namespace AlKhayal.IntegrationTests
                 var balances = await f.Db.Service.ListAsync(CancellationToken.None); Assert.Equal("12.34", balances.Single(x => x.Name == "إيراد الوردية").Balance); Assert.Equal("0.00", balances.Single(x => x.Name == "مرتجعات البيع").Balance);
                 var replay = await f.Sales.ReturnAsync(draft.Id, SaleReturn(posted.Invoice), f.Db.UserId, CancellationToken.None); Assert.True(replay.Replayed); Assert.Equal(result.ReturnId, replay.ReturnId);
                 var rows = await Service(f).ListAsync(draft.InvoiceNumber, CancellationToken.None); Assert.Single(rows); Assert.Equal("sales", rows[0].Type);
+                var page = await Service(f).ListPageAsync(draft.InvoiceNumber, 10, 25, CancellationToken.None);
+                Assert.Equal(1, page.TotalCount);
+                Assert.Equal(1, page.Page);
+                Assert.Equal(rows[0].Id, Assert.Single(page.Items).Id);
                 Assert.Empty(await Service(f).ListAsync("missing-number", CancellationToken.None)); Assert.Null(await Service(f).LookupAsync("sales", "missing-number", CancellationToken.None));
                 var refreshed = await Service(f).LookupAsync("sales", draft.InvoiceNumber, CancellationToken.None); Assert.Equal("0", refreshed.Lines[0].Available);
                 using (var c = f.Db.Open()) { Assert.Equal(3, c.ExecuteScalar<long>("SELECT COUNT(*) FROM TreasuryMovements")); Assert.Equal(shiftVersion,c.ExecuteScalar<long>("SELECT Version FROM TreasuryAccounts WHERE Id=@id",new{id=posted.Invoice.TreasuryAccountId})); Assert.Equal(shiftAudit,c.ExecuteScalar<long>("SELECT COUNT(*) FROM TreasuryAudit WHERE AccountId=@id",new{id=posted.Invoice.TreasuryAccountId})); Assert.Equal(1,c.ExecuteScalar<long>("SELECT COUNT(*) FROM TreasuryMovements WHERE AccountId=@id",new{id=posted.Invoice.TreasuryAccountId})); Assert.Empty(c.Query<dynamic>("PRAGMA foreign_key_check")); Assert.Throws<System.Data.SQLite.SQLiteException>(() => c.Execute("DELETE FROM ReturnTreasuryLinks")); }
@@ -139,6 +143,9 @@ namespace AlKhayal.IntegrationTests
                 var detail = await Service(f).GetAsync("purchase", cash.Id, CancellationToken.None); Assert.Single(detail.Movements); Assert.Equal("مرتجعات الشراء", detail.Movements[0].AccountName); Assert.Equal("deposit", detail.Movements[0].Type); Assert.Single(detail.Lines);
                 Assert.True((await service.PostReturnAsync(invoice.Id, command, "managed-purchase-return", f.Db.UserId, CancellationToken.None)).Replayed);
                 command.ReturnMode = "supplier_credit"; var credit = await service.PostReturnAsync(invoice.Id, command, "managed-purchase-credit", f.Db.UserId, CancellationToken.None); Assert.True(credit.Succeeded, credit.ErrorMessage); Assert.Empty((await Service(f).GetAsync("purchase", credit.Id, CancellationToken.None)).Movements);
+                var purchasePage = await Service(f).ListPageAsync("PUR-MANAGED", 1, 25, CancellationToken.None);
+                Assert.Equal(2, purchasePage.TotalCount);
+                Assert.All(purchasePage.Items, row => Assert.Equal("purchase", row.Type));
                 Assert.Equal(2, (await Service(f).ListAsync("PUR-MANAGED", CancellationToken.None)).Count);
                 Assert.Equal("9.00", Assert.Single(await f.Db.Service.ListAsync(CancellationToken.None)).Balance);
                 Assert.Equal("partial",(await service.GetAsync(invoice.Id,CancellationToken.None)).ReturnStatus);

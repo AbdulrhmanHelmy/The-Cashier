@@ -2,7 +2,7 @@
   "use strict";
   // One body-level overlay reuses the already filtered sidebar tree, never a second route list.
   window.AlKhayalSidebarFlyout = function (options) {
-    var nav = options.navigation, shell = options.shell, trigger = null, timer = null, suppressFocus = false, hoveredSource = null, panelHovered = false;
+    var nav = options.navigation, shell = options.shell, trigger = null, timer = null, hoveredSource = null, panelHovered = false;
     var panel = document.createElement("nav"), title = document.createElement("strong"), body = document.createElement("div");
     panel.id = "sidebarFlyout";
     panel.className = "sidebar-flyout";
@@ -15,7 +15,7 @@
     panel.appendChild(title);
     panel.appendChild(body);
     document.body.appendChild(panel);
-    function collapsed() { return shell.classList.contains("sidebar-collapsed") || window.innerWidth <= 1080; }
+    function collapsed() { return shell.classList.contains("sidebar-collapsed"); }
     function cancelClose() { clearTimeout(timer); timer = null; }
     function close(restoreFocus) {
       cancelClose();
@@ -30,9 +30,7 @@
       panel.hidden = true;
       body.textContent = "";
       if (restoreFocus && previous && nav.contains(previous)) {
-        suppressFocus = true;
         previous.focus();
-        suppressFocus = false;
       }
     }
     function scheduleClose() {
@@ -89,13 +87,12 @@
     function source(event) { return event.target.closest("[data-module-toggle]"); }
     nav.addEventListener("pointerover", function (event) { var button = source(event); if (button && !button.contains(event.relatedTarget)) { open(button, false); hoveredSource = button; } });
     nav.addEventListener("pointerout", function (event) { var button = source(event); if (button && !button.contains(event.relatedTarget)) { hoveredSource = null; scheduleClose(); } });
-    nav.addEventListener("focusin", function (event) { if (!suppressFocus) open(source(event), false); });
     nav.addEventListener("focusout", scheduleClose);
     nav.addEventListener("keydown", function (event) {
       var button = source(event);
       if (!button || !collapsed()) return;
       if (event.key === "Escape") { event.preventDefault(); close(false); }
-      else if (event.key === "ArrowLeft" || event.key === "ArrowDown" || (event.key === "Tab" && !event.shiftKey)) {
+      else if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
         event.preventDefault(); open(button, true);
       }
     });
@@ -109,7 +106,7 @@
       var links = Array.prototype.slice.call(body.querySelectorAll("[data-route]")), index = links.indexOf(document.activeElement);
       if (event.shiftKey && index === 0) { event.preventDefault(); close(true); }
       else if (!event.shiftKey && index === links.length - 1) {
-        var buttons = Array.prototype.slice.call(nav.querySelectorAll("[data-module-toggle]")), next = buttons[buttons.indexOf(trigger) + 1] || document.querySelector('.sidebar-footer button:not([hidden])');
+        var buttons = Array.prototype.slice.call(nav.querySelectorAll(".sidebar-group-toggle")), next = buttons[buttons.indexOf(trigger) + 1] || document.querySelector('.sidebar-footer button:not([hidden])');
         if (next) { event.preventDefault(); close(false); next.focus(); }
       }
     });

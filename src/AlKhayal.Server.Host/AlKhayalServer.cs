@@ -149,6 +149,7 @@ namespace AlKhayal.Server.Host
                 };
                 var contentTypes = new Microsoft.Owin.StaticFiles.ContentTypes.FileExtensionContentTypeProvider();
                 contentTypes.Mappings[".json"] = "application/json; charset=utf-8";
+                contentTypes.Mappings[".woff2"] = "font/woff2";
                 fileOptions.StaticFileOptions.ContentTypeProvider = contentTypes;
                 fileOptions.StaticFileOptions.OnPrepareResponse = context =>
                 {

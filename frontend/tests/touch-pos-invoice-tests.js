@@ -19,12 +19,61 @@ async function verifyResumeChoices(){
     assert.equal(await result,choice==="confirm",choice+" resolves consent correctly");assert.equal(layer.hidden,true);
   }
 }
+async function verifyCashChangeCalculator(){
+  var posted = Object.assign(invoice("posted"), {
+    paymentMode:"cash", immediateMethod:"cash", paidScaled:242000, outstandingScaled:0
+  });
+  var scenarios = [
+    ["cash", {}, true], ["disabled", {}, false],
+    ["card", {immediateMethod:"card"}, false], ["wallet", {immediateMethod:"wallet"}, false],
+    ["mixed", {paymentMode:"mixed"}, false], ["credit", {paymentMode:"credit"}, false],
+    ["unpaid", {paidScaled:0, outstandingScaled:242000}, false],
+    ["returned", {hasReturns:true}, false], ["canceled", {status:"canceled"}, false],
+    ["installment", {installmentContractId:4}, false], ["failed", null, false]
+  ];
+  for (var [name, overrides, expected] of scenarios) {
+    var h = await harness(invoice(), "pos", {});
+    h.win.AlKhayalSettings.current = function () { return {showCashChangeCalculator:name !== "disabled"}; };
+    var prints = [];
+    h.win.AlKhayalPrinting = {submit:function () { prints.push(Array.from(arguments)); }};
+    h.state.lines = copy(posted.lines);
+    var checkout = h.test.postSale();
+    await settle();
+    assert.equal(h.modal(), null, "no calculator during draft save");
+    h.pending().resolve(invoice());
+    await settle();
+    assert.equal(h.modal(), null, "no calculator during posting");
+    await h.test.postSale();
+    assert.equal(h.writes().length, 2, "rapid checkout cannot post twice");
+    if (overrides) h.pending().resolve(Object.assign(copy(posted), overrides));
+    else h.pending().reject(Object.assign(new Error("checkout failed"), {status:400}));
+    await checkout;
+    assert.equal(Boolean(h.modal()), expected, name);
+    if (!expected) continue;
+    assert.deepEqual(prints, [["sale", 21, true]], "existing receipt request still runs");
+    assert.equal(h.state.lines.length, 0, "successful checkout reset the cart");
+    var input = h.modal().querySelector("#cashChangeReceived");
+    var amount = h.modal().querySelector("#cashChangeAmount");
+    var feedback = h.modal().querySelector("#cashChangeFeedback");
+    assert.equal(input.value, "24.20");
+    assert.equal(amount.textContent, "0");
+    for (var [entered, change] of [["٢٤٫٢١","0.01"],["24.19","0"],["-1","—"],["24.201","—"]]) {
+      input.value = entered;
+      input.oninput();
+      assert.equal(amount.textContent, change);
+      if (entered === "24.19") assert.match(feedback.textContent, /أقل/);
+    }
+    h.modal().querySelector("#cashChangeForm").onsubmit({preventDefault:function () {}});
+    assert.equal(h.modal(), null);
+    assert.equal(h.writes().length, 2, "calculator never writes payment or invoice data");
+  }
+}
 async function harness(saved,route,tabState){
   var host=new Element("section"),calls=[],confirmations=[],messages=[],navigations=[],answer=true,pendingSave,loadResolvers=[],modalNode=null,modalOptions=null;
-  var win={confirm:function(){return answer;},AlKhayalRenderers:{},AlKhayalSettings:{current:function(){return {taxEnabled:true,defaultTaxRate:50,pricesIncludeTax:false};}},AlKhayalUtils:{escape:String,money:String,number:String,normalize:String,debounce:function(fn){return fn;}},AlKhayalUI:{pageHeader:function(){return "";},toast:function(x){messages.push(x);},confirm:function(o){confirmations.push(o);return Promise.resolve(answer);},modal:function(o){modalOptions=o;modalNode=new Element("div");modalNode.innerHTML=o.body+o.actions;if(o.onOpen)o.onOpen(modalNode);},closeModal:function(){if(modalOptions&&modalOptions.beforeClose)modalOptions.beforeClose();modalNode=null;modalOptions=null;}},AlKhayalApi:{request:function(url,options){calls.push({url:url,options:options});if(options)return new Promise(function(resolve,reject){pendingSave={resolve:resolve,reject:reject,body:JSON.parse(options.body)};});if(url==="/api/sales/21")return Promise.resolve(copy(saved));if(url.indexOf("/api/sales/")===0)return new Promise(function(resolve){loadResolvers.push(resolve);});if(url.indexOf("/api/sales?")===0)return Promise.resolve([copy(saved)]);if(url==="/api/inventory/warehouses")return Promise.resolve([{id:1,name:"الحالي",isActive:true,isDefault:true}]);if(url==="/api/settings/company")return Promise.resolve({});if(url==="/api/payment-methods/active")return Promise.resolve([]);if(url==="/api/inventory/categories")return Promise.resolve([{id:5,name:"تصنيف"}]);if(url.indexOf("/api/inventory/products?")===0)return Promise.resolve({items:[],totalCount:0});if(url==="/api/inventory/products/1")return Promise.resolve({id:1,name:"إضافة",salePrice:"5.00",variants:[{id:12,name:"افتراضي",isActive:true,isDefault:true,effectiveSalePriceExact:"5.0000"}],units:[{id:22,name:"قطعة",isActive:true,isBase:true,isSaleUnit:true}],capabilities:[]});return Promise.resolve([]);}}};
+  var win={confirm:function(){return answer;},AlKhayalRenderers:{},AlKhayalSettings:{current:function(){return {taxEnabled:true,defaultTaxRate:50,pricesIncludeTax:false};}},AlKhayalUtils:{escape:String,money:String,number:String,normalize:String,debounce:function(fn){return fn;}},AlKhayalUI:{pageHeader:function(){return "";},toast:function(x){messages.push(x);},confirm:function(o){confirmations.push(o);return Promise.resolve(answer);},modal:function(o){modalOptions=o;modalNode=new Element("div");modalNode.innerHTML=o.body+o.actions;if(o.onOpen)o.onOpen(modalNode);},closeModal:function(){if(modalOptions&&modalOptions.beforeClose)modalOptions.beforeClose();modalNode=null;modalOptions=null;}},AlKhayalApi:{request:function(url,options){calls.push({url:url,options:options});if(options)return new Promise(function(resolve,reject){pendingSave={resolve:resolve,reject:reject,body:JSON.parse(options.body)};});if(url==="/api/sales/21")return Promise.resolve(copy(saved));if(/^\/api\/sales\/\d+$/.test(url))return new Promise(function(resolve){loadResolvers.push(resolve);});if(url==="/api/sales/suspended-count")return Promise.resolve({count:0});if(url.indexOf("/api/sales/page?")===0)return Promise.resolve({items:[copy(saved)],page:1,totalCount:1});if(url==="/api/inventory/warehouses")return Promise.resolve([{id:1,name:"الحالي",isActive:true,isDefault:true}]);if(url==="/api/settings/company")return Promise.resolve({});if(url==="/api/payment-methods/active")return Promise.resolve([]);if(url==="/api/inventory/categories")return Promise.resolve([{id:5,name:"تصنيف"}]);if(url.indexOf("/api/inventory/products?")===0)return Promise.resolve({items:[],totalCount:0});if(url==="/api/inventory/products/1")return Promise.resolve({id:1,name:"إضافة",salePrice:"5.00",variants:[{id:12,name:"افتراضي",isActive:true,isDefault:true,effectiveSalePriceExact:"5.0000"}],units:[{id:22,name:"قطعة",isActive:true,isBase:true,isSaleUnit:true}],capabilities:[]});return Promise.resolve([]);}}};
   var query=host.querySelector.bind(host);host.querySelector=function(selector){var node=query(selector);if(node&&node.tag==="input"){node.validity=node.validity||{customError:false};node.setCustomValidity=function(message){this.validity.customError=!!message;this.validationMessage=message;};}return node;};
   var values={};var store={getItem:function(key){return values[key]||null;},setItem:function(key,value){values[key]=value;},removeItem:function(key){delete values[key];}};
-  vm.runInNewContext(source.replace("    init();","    global.__invoiceTest={state:state,draw:draw,loadInvoice:loadInvoice,saveDraft:saveDraft,postSale:postSale,newTouchInvoice:newTouchInvoice};init();"),{window:win,BigInt:BigInt,Date:Date,setTimeout:setTimeout,clearTimeout:clearTimeout,sessionStorage:store});
+  vm.runInNewContext(source.replace("    init();","    global.__invoiceTest={state:state,draw:draw,loadInvoice:loadInvoice,saveDraft:saveDraft,postSale:postSale,newTouchInvoice:newTouchInvoice};init();"),{window:win,document:{getElementById:function(){return modalNode?{hidden:false}:null;}},URLSearchParams:URLSearchParams,BigInt:BigInt,Date:Date,setTimeout:setTimeout,clearTimeout:clearTimeout,sessionStorage:store});
   win.AlKhayalRenderers[route==="sales-list"?"sales-invoices":"pos"]({route:route||"pos"},host,{state:tabState||(route==="sales-list"?{}:{saleInvoiceId:21}),isActive:function(){return true;},navigate:function(r,s){navigations.push({route:r,state:s});},canNavigate:function(){return true;}});
   await settle();
   return {saved:function(next){saved=copy(next);},session:values,win:win,host:host,state:win.__invoiceTest.state,test:win.__invoiceTest,calls:calls,confirmations:confirmations,messages:messages,navigations:navigations,answer:function(a){answer=a;},pending:function(){return pendingSave;},loads:loadResolvers,modal:function(){return modalNode;},clickModal:async function(selector){var target=modalNode&&modalNode.querySelector(selector);assert.ok(target,selector);await target.onclick();await settle();},click:async function(selector){var target=host.querySelector(selector);assert.ok(target,selector);await host.onclick(event(target));await settle();},writes:function(){return calls.filter(function(c){return !!c.options;});}};
@@ -33,6 +82,7 @@ module.exports=async function(){
   assert.ok(source.indexOf('e.target.closest("[data-back]")&&state.mode==="touch"')>=0&&source.indexOf('context.canNavigate("sales-management")')>=0&&source.indexOf('context.navigate("sales-management")')>=0,"Touch POS invoices button uses the canonical permission-aware workspace route");
   assert.ok(source.indexOf('data-suspended-count')>=0,"Touch POS invoices button retains the suspended-invoice badge");
   await verifyResumeChoices();
+  await verifyCashChangeCalculator();
   var layout=require("./touch-pos-layout-tests.js");
   var empty=await harness(invoice(),"pos",{});layout(empty.host,false);
   assert.equal(empty.state.lines.length,0,"empty invoice keeps shared actions");

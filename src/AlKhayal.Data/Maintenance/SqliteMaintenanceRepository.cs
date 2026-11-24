@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Data.SQLite;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using AlKhayal.Application.Customers;
 using AlKhayal.Application.Maintenance;
 using AlKhayal.Data.Customers;
@@ -43,12 +45,29 @@ VALUES(@CustomerId,@number,@operationKey,@requestHash,@Phone,@Device,@Model,@Ser
             }
         }
 
-        public List<MaintenanceTicket> List(long? customerId)
+        public List<MaintenanceTicket> List(long? customerId, long? ticketId = null)
         {
             using(var c=new SQLiteConnection(_connectionString))
             {
-                var ids=c.Query<long>("SELECT Id FROM MaintenanceTickets WHERE @CustomerId IS NULL OR CustomerId=@CustomerId ORDER BY Id DESC",new{CustomerId=customerId}).ToList();
+                var ids=c.Query<long>("SELECT Id FROM MaintenanceTickets WHERE (@CustomerId IS NULL OR CustomerId=@CustomerId) AND (@TicketId IS NULL OR Id=@TicketId) ORDER BY Id DESC",new{CustomerId=customerId,TicketId=ticketId}).ToList();
                 return ids.Select(id=>Get(c,id)).ToList();
+            }
+        }
+
+        public async Task<IReadOnlyList<MaintenanceTicket>> SearchAsync(string query, CancellationToken ct)
+        {
+            var like = "%" + query.Replace("!", "!!").Replace("%", "!%").Replace("_", "!_") + "%";
+            using (var c = new SQLiteConnection(_connectionString))
+            {
+                await c.OpenAsync(ct).ConfigureAwait(false);
+                var rows = await c.QueryAsync<MaintenanceTicket>(new CommandDefinition(@"
+                    SELECT t.Id,t.TicketNumber,c.Name CustomerName,t.Device
+                    FROM MaintenanceTickets t JOIN Customers c ON c.Id=t.CustomerId
+                    WHERE t.TicketNumber LIKE @Like ESCAPE '!' OR c.Name LIKE @Like ESCAPE '!'
+                        OR t.Device LIKE @Like ESCAPE '!' OR t.Model LIKE @Like ESCAPE '!' OR t.Serial LIKE @Like ESCAPE '!'
+                    ORDER BY CASE WHEN t.TicketNumber = @Query COLLATE NOCASE THEN 0 ELSE 1 END,t.Id DESC LIMIT 20",
+                    new { Query = query, Like = like }, cancellationToken: ct)).ConfigureAwait(false);
+                return rows.ToList();
             }
         }
 

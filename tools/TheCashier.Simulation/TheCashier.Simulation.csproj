@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <PlatformTarget>x86</PlatformTarget>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/AlKhayal.Application/AlKhayal.Application.csproj" />
+    <PackageReference Include="Dapper" Version="2.1.89" />
+    <PackageReference Include="System.Data.SQLite.Core" Version="1.0.119" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.Management" />
+    <Reference Include="System.Security" />
+    <Reference Include="System.Web.Extensions" />
+    <Compile Include="$(SimulationDataSource)/**/*.cs" Condition="'$(SimulationDataSource)' != ''" />
+    <EmbeddedResource Include="../../src/AlKhayal.Data/Migrations/*.sql" LogicalName="AlKhayal.Data.Migrations.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../../src/AlKhayal.Data/Licensing/TrustedKeys/*.xml" LogicalName="AlKhayal.Data.Licensing.TrustedKeys.%(Filename)%(Extension)" />
+  </ItemGroup>
+  <Target Name="RequirePreparedSimulationSources" BeforeTargets="CoreCompile" Condition="'$(SimulationDataSource)' == ''">
+    <Error Text="Use Invoke-Simulation.ps1 to prepare the development-only repository sources." />
+  </Target>
+</Project>

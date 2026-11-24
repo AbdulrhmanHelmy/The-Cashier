@@ -13,6 +13,7 @@ function harness(allowedRoutes){
 }
 async function checkout(route){
   var h=harness();
+  var messages=[];h.win.AlKhayalUI.toast=function(message){messages.push(message);};
   // Expose closures only in the VM, keeping production free of test APIs.
   var source=sources.sales.replace('    init();','    global.__paymentTest={state:state,draw:draw,payload:payload,postSale:postSale};');
   vm.runInNewContext(source,h.context);h.win.AlKhayalRenderers[route==='pos'?'pos':'sales-invoices']({route:route},h.host,h.renderContext);
@@ -28,10 +29,25 @@ async function checkout(route){
   method.value='credit';method.onchange();assert.equal(test.payload().paymentMode,'credit');assert.equal(test.payload().paymentInstrumentId,null);
   method.value='cash';method.onchange();assert.equal(test.payload().immediateMethod,'cash');
   var first=test.postSale();test.postSale();assert.equal(h.calls.length,1,'duplicate checkout must issue one save');assert.ok(test.state.busy);h.pending[0].reject(new Error('رفض'));await first;assert.equal(test.state.busy,false);
-  test.state.invoice={id:9,status:'draft'};h.context.sessionStorage.setItem('alkhayal_sale_post_9','uncertain-key');
-  var retry=test.postSale();assert.equal(h.calls[1].url,'/api/sales/9');assert.equal(h.calls[1].options,undefined);
-  h.pending[1].resolve({id:9,status:'posted'});await settle();assert.equal(h.calls[2].url,'/api/sales/9/post');assert.equal(JSON.parse(h.calls[2].options.body).operationKey,'uncertain-key');
-  h.pending[2].resolve({id:9,status:'posted',lines:test.state.lines,totalScaled:100000});await retry;assert.equal(h.calls.filter(function(call){return call.url==='/api/sales/drafts';}).length,1,'uncertain posted response must not create a second draft');if(route==='pos')assert.ok(h.calls.some(function(call){return call.url.indexOf('/api/inventory/products?')===0;}),'completed Touch POS sale refreshes product availability for the next invoice');
+  test.state.invoice={id:9,status:'draft'};
+  var saved={id:9,invoiceNumber:'QA-SALE-9',status:'draft',lines:test.state.lines,totalScaled:100000};
+  var interrupted=test.postSale();h.pending[1].resolve(saved);await settle();
+  assert.equal(h.calls[2].url,'/api/sales/9/post');
+  var operationKey=JSON.parse(h.calls[2].options.body).operationKey;
+  h.pending[2].reject(Object.assign(new Error('انقطع الاتصال'),{status:0,code:'network_error'}));await interrupted;
+  assert.equal(h.calls.length,3,'the UI never automatically retries a lost post response');
+  assert.ok(messages.some(function(message){return message.includes('تعذر تأكيد نتيجة إتمام الفاتورة')&&message.includes('QA-SALE-9');}));
+  assert.equal(h.host.querySelector('[data-result-view]'),null,'an uncertain post cannot show success');
+  var retry=test.postSale();assert.equal(h.calls[3].url,'/api/sales/9');assert.equal(h.calls[3].options,undefined);
+  var posted=Object.assign({},saved,{status:'posted',paymentMode:'cash'});
+  h.pending[3].resolve(posted);await settle();assert.equal(h.calls[4].url,'/api/sales/9/post');assert.equal(JSON.parse(h.calls[4].options.body).operationKey,operationKey);
+  h.pending[4].resolve(posted);
+  if(route!=='pos'){await settle();h.pending[h.pending.length-1].resolve([posted]);}
+  await retry;await settle();
+  assert.equal(h.calls.filter(function(call){return call.url==='/api/sales/drafts';}).length,1,'the explicit retry must not create a second draft');
+  assert.ok(h.host.querySelector('[data-result-view]'),'the confirmed invoice retains its View action');
+  assert.ok(h.host.innerHTML.includes('QA-SALE-9'));
+  if(route==='pos')assert.ok(h.calls.some(function(call){return call.url.indexOf('/api/inventory/products?')===0;}),'completed Touch POS sale refreshes product availability for the next invoice');
 
 }
 async function management(){

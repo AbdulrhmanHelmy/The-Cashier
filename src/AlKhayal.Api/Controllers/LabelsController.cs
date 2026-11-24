@@ -31,6 +31,10 @@ namespace AlKhayal.Api.Controllers
         public Task<IHttpActionResult> Save(LabelSettings settings, CancellationToken ct) => Run(true, false, true, ct, async u => Ok(ApiEnvelope<LabelSettings>.Ok(await _labels.SaveAsync(settings, u.Id, ct).ConfigureAwait(false))));
         [HttpPut, Route("printer-assignment")]
         public Task<IHttpActionResult> AssignPrinter(LabelPrinterAssignment request, CancellationToken ct) => Run(true, false, true, ct, async u => Ok(ApiEnvelope<LabelSettings>.Ok(await _labels.AssignPrinterAsync(request, u.Id, ct).ConfigureAwait(false))));
+        [HttpPut, Route("design")]
+        public Task<IHttpActionResult> SaveDesign(LabelDesignRequest request, CancellationToken ct) => Run(true, false, true, ct, async u => Ok(ApiEnvelope<LabelSettings>.Ok(await _labels.SaveDesignAsync(request, u.Id, ct).ConfigureAwait(false))));
+        [HttpPost, Route("design/preview")]
+        public Task<IHttpActionResult> PreviewDesign(LabelDesignPreviewRequest request, CancellationToken ct) => Run(true, false, true, ct, async u => Ok(ApiEnvelope<object>.Ok(new { pngBase64 = Convert.ToBase64String(await _labels.PreviewDesignAsync(request, ct).ConfigureAwait(false)) })));
         [HttpPost, Route("preview")]
         public Task<IHttpActionResult> Preview(LabelTemplate template, CancellationToken ct) => Run(true, false, true, ct, async u => Ok(ApiEnvelope<object>.Ok(new { pngBase64 = Convert.ToBase64String(await _labels.PreviewAsync(template, ct).ConfigureAwait(false)) })));
         [HttpPost, Route("product-preview")]

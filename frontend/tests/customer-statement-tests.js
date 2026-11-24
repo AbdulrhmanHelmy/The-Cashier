@@ -4,28 +4,28 @@ var source=fs.readFileSync(path.join(__dirname,"../js/modules/renderers.js"),"ut
 function settle(){return new Promise(function(resolve){setImmediate(resolve);});}
 function statement(id,balance){return{customerId:id,customerName:"عميل "+id,currentBalance:balance,openingBalance:0,totalDebit:balance,totalCredit:0,closingBalance:balance,movements:[{date:"2026-10-28",description:"إضافة مديونية",notes:"تفاصيل محفوظة",debit:balance,credit:0,balance:balance}]};}
 function harness(initialState){
-  var reads=[],writes=[],pending=[],modal,options,active=true;
+  var reads=[],writes=[],pending=[],modal,options,active=true,accountResponse;
   var api={request:function(url,config){if(config){writes.push({url:url,data:JSON.parse(config.body)});return new Promise(function(resolve,reject){pending.push({resolve:resolve,reject:reject});});}
     if(url==="/api/customers")return Promise.resolve([{id:1,name:"عميل أول",code:"C1"},{id:2,name:"عميل ثان",code:"C2"}]);
-    if(url==="/api/treasury/accounts")return Promise.resolve([{id:7,name:"الخزنة",type:"cash"},{id:8,name:"البنك",type:"bank"}]);
+    if(url==="/api/treasury/accounts")return accountResponse||Promise.resolve([{id:7,name:"الخزنة",type:"cash"},{id:8,name:"البنك",type:"bank"}]);
     return new Promise(function(resolve,reject){reads.push({url:url,resolve:resolve,reject:reject});});}};
   var win={AlKhayalUtils:{escape:function(x){return String(x==null?"":x);},money:String,date:String},AlKhayalServices:{},AlKhayalCalculations:{},AlKhayalUI:{pageHeader:function(){return "";},toast:function(){},closeModal:function(){},modal:function(value){options=value;modal=new Element("section");modal.innerHTML=value.body+value.actions;value.onOpen(modal);}}};
   vm.runInNewContext(source,{window:win,AlKhayalApi:api},{filename:"customer-statement.js"});
   var node=new Element("section"),state=initialState||{};win.AlKhayalRenderers.statement({party:"customer"},node,{state:state,isActive:function(){return active;}});
-  return{node:node,reads:reads,writes:writes,pending:pending,modal:function(){return modal;},options:function(){return options;},leave:function(){active=false;},submit:function(){modal.querySelector("#customerAccountForm").onsubmit({preventDefault:function(){}});}};
+  return{node:node,reads:reads,writes:writes,pending:pending,modal:function(){return modal;},options:function(){return options;},leave:function(){active=false;},setAccounts:function(response){accountResponse=response;},submit:function(){modal.querySelector("#customerAccountForm").onsubmit({preventDefault:function(){}});}};
 }
 async function selectedCustomerAndRapidReopen(){
   var state={customerStatementId:2},h=harness(state);await settle();
-  assert.equal(h.reads[0].url,"/api/customers/2/statement","an explicit navigation customer must win over list order and defaults");
+  assert.equal(h.reads[0].url,"/api/customers/2/statement?page=1","an explicit navigation customer must win over list order and defaults");
   h.reads[0].resolve(statement(2,20));await settle();assert.ok(h.node.querySelector("#statementBody").innerHTML.includes("عميل 2"));
   var customer=h.node.querySelector("#statementCustomer");customer.value="1";customer.onchange();customer.value="2";customer.onchange();
-  assert.equal(h.reads[1].url,"/api/customers/1/statement");assert.equal(h.reads[2].url,"/api/customers/2/statement");
+  assert.equal(h.reads[1].url,"/api/customers/1/statement?page=1");assert.equal(h.reads[2].url,"/api/customers/2/statement?page=1");
   h.reads[2].resolve(statement(2,22));await settle();h.reads[1].resolve(statement(1,99));await settle();
   assert.ok(h.node.querySelector("#statementBody").innerHTML.includes("عميل 2"),"a late response for a rapidly clicked prior customer must not repaint the statement");
-  h.leave();state.customerStatementId=1;var reopened=harness(state);await settle();assert.equal(reopened.reads[0].url,"/api/customers/1/statement","reopening an existing statement tab with new route state must load the newly selected customer");
+  h.leave();state.customerStatementId=1;var reopened=harness(state);await settle();assert.equal(reopened.reads[0].url,"/api/customers/1/statement?page=1","reopening an existing statement tab with new route state must load the newly selected customer");
 }
 async function operationsAndRetry(){
-  var h=harness();await settle();assert.equal(h.reads[0].url,"/api/customers/1/statement");h.reads[0].resolve(statement(1,100));await settle();
+  var h=harness();await settle();assert.equal(h.reads[0].url,"/api/customers/1/statement?page=1");h.reads[0].resolve(statement(1,100));await settle();
   assert.ok(h.node.querySelector("#statementBody").innerHTML.includes("تفاصيل محفوظة"));
   assert.ok(h.node.innerHTML.includes("customer-statement-filters"),"the active statement renderer must expose the scoped filter treatment");
   assert.ok(h.node.querySelector("#statementBody").innerHTML.includes("customer-current-balance"),"the current balance must use the emphasized summary card");
@@ -50,11 +50,35 @@ async function filtersAndStale(){
   h.reads[2].reject({message:"فشل التحميل"});await settle();h.node.querySelector("[data-statement-retry]").onclick();assert.equal(h.reads.length,4);
   h.leave();var before=h.node.querySelector("#statementBody").innerHTML;h.reads[3].resolve(statement(2,50));await settle();assert.equal(h.node.querySelector("#statementBody").innerHTML,before);
 }
+async function collectionDialogContext(){
+  var h=harness(), resolveAccounts;
+  h.setAccounts(new Promise(function(resolve){resolveAccounts=resolve;}));
+  await settle();
+  h.reads[0].resolve(statement(1,100));await settle();
+  h.node.querySelector("[data-customer-collect]").onclick();
+  var customer=h.node.querySelector("#statementCustomer");
+  customer.value="2";customer.onchange();
+  h.reads[1].resolve(statement(2,25));await settle();
+  h.node.querySelector("[data-customer-increase]").onclick();
+  var currentModal=h.modal();
+  resolveAccounts([{id:7,name:"الخزنة",type:"cash"}]);await settle();
+  assert.strictEqual(h.modal(),currentModal,"a delayed collection must not replace the newly selected customer's debt dialog");
+  assert.equal(h.writes.length,0);
+}
+async function missingRequestedCustomer(){
+  var h=harness({customerStatementId:99});await settle();
+  assert.equal(h.reads.length,0,"an unavailable route ID must not load a different customer's statement");
+  assert.ok(h.node.querySelector("[data-customer-increase]").disabled);
+  assert.ok(h.node.querySelector("[data-customer-collect]").disabled);
+  var customer=h.node.querySelector("#statementCustomer");
+  customer.value="2";customer.onchange();
+  assert.equal(h.reads[0].url,"/api/customers/2/statement?page=1");
+}
 module.exports=async function(){
   assert.ok(source.includes("customer-directory-toolbar")&&source.includes("customer-directory-table"),"the active customer directory renderer must use its scoped visual hooks");
   assert.ok(source.includes("customer-record-form"),"the active customer add/edit modal must use its scoped two-column form hook");
   assert.deepStrictEqual(registry.modules.find(function(x){return x.id==="customers";}).items,["customers-list","customer-statement"]);
   var old=registry.screens.find(function(x){return x.route==="customer-credit-payment";});assert.ok(old.navigationHidden);assert.equal(old.redirectTo,"customer-statement");
-  await operationsAndRetry();await filtersAndStale();await selectedCustomerAndRapidReopen();console.log("Customer statement persistence wiring, collection/increase, retry identity, filters, navigation and stale-response tests passed.");
+  await operationsAndRetry();await filtersAndStale();await selectedCustomerAndRapidReopen();await collectionDialogContext();await missingRequestedCustomer();console.log("Customer statement persistence wiring, collection/increase, retry identity, filters, navigation and stale-response tests passed.");
 };
 if(require.main===module)module.exports().catch(function(error){console.error(error);process.exitCode=1;});

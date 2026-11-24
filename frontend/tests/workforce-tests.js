@@ -17,7 +17,7 @@ function harness(deferred) {
       if (url === '/api/workforce/shifts/current') return Promise.resolve(currentShift);
       if (url === '/api/users') return Promise.resolve([{ id: 3, displayName: 'مدير', username: 'owner', isActive: true }]);
       if (url === '/api/treasury/accounts') return Promise.resolve([{ id: 7, name: 'الخزنة', balance: '10000.00' }]);
-      if (url.indexOf('/api/workforce/payroll?') === 0 || url.indexOf('/api/workforce/advances') === 0) return Promise.resolve([]);
+      if (url.indexOf('/api/workforce/payroll/history?') === 0) return Promise.resolve({history:{items:[],page:1,pageSize:50,total:0},pendingAdvance:'0.00',alreadyPaid:false}); if (url.indexOf('/api/workforce/advances/history') === 0) return Promise.resolve({items:[],page:1,pageSize:50,total:0});
       if (url.indexOf('/api/workforce/attendance?') === 0) return Promise.resolve({ items: [{ id: 11, employeeId: 1, employeeName: 'موظف محفوظ', checkInUtc: '2026-10-31T08:00:00Z', checkOutUtc: null, breakMinutes: 0, workedSeconds: 60, version: 1 }], total: 1, page: 1, pageSize: 25 });
       if (deferred) return new Promise(function (resolve, reject) { reads.push({ resolve: resolve, reject: reject }); });
       return Promise.resolve({ items: rows, total: rows.length, page: 1, pageSize: 25 });

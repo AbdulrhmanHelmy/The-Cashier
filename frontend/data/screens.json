@@ -58,6 +58,7 @@
     },
     {
       "id": "payment-methods",
+      "landingRoute": "payment-overview",
       "title": "وسائل الدفع",
       "icon": "د",
       "items": [
@@ -171,7 +172,8 @@
     },
     {
       "route": "customers-list",
-      "label": "إدارة العملاء"
+      "label": "إضافة عميل",
+      "action": "create-customer"
     },
     {
       "route": "warehouses-list",

@@ -22,6 +22,7 @@ namespace AlKhayal.Application.Payments
     }
     public sealed class PaymentHistoryQuery
     {
+        public long? InvoiceId { get; set; }
         public long? InstrumentId { get; set; }
         public long? CashierId { get; set; }
         public string CashierName { get; set; }
@@ -63,7 +64,7 @@ namespace AlKhayal.Application.Payments
     }
     public interface IPaymentInstrumentStore
     {
-        Task<IReadOnlyList<PaymentInstrument>> ListAsync(string type, bool activeOnly, CancellationToken ct);
+        Task<IReadOnlyList<PaymentInstrument>> ListAsync(string type, bool activeOnly, CancellationToken ct, string search = null, long? id = null);
         Task<PaymentInstrument> SaveAsync(PaymentInstrument instrument, string identity, long actor, CancellationToken ct);
         Task<PaymentHistoryPage> HistoryAsync(PaymentHistoryQuery query, CancellationToken ct);
         Task<PaymentOverview> OverviewAsync(CancellationToken ct);
@@ -72,8 +73,8 @@ namespace AlKhayal.Application.Payments
     {
         private readonly IPaymentInstrumentStore _store;
         public PaymentInstrumentService(IPaymentInstrumentStore store) { _store = store; }
-        public Task<IReadOnlyList<PaymentInstrument>> ListAsync(string type, bool activeOnly, CancellationToken ct)
-        { if (type != null && type != "wallet" && type != "card") throw new ArgumentException("نوع وسيلة الدفع غير صحيح."); return _store.ListAsync(type, activeOnly, ct); }
+        public Task<IReadOnlyList<PaymentInstrument>> ListAsync(string type, bool activeOnly, CancellationToken ct, string search = null, long? id = null)
+        { if (type != null && type != "wallet" && type != "card") throw new ArgumentException("نوع وسيلة الدفع غير صحيح."); if (search != null && (string.IsNullOrWhiteSpace(search) || search.Length > 120) || id <= 0) throw new ArgumentException("أدخل عبارة بحث صالحة."); return _store.ListAsync(type, activeOnly, ct, search?.Trim(), id); }
         public Task<PaymentInstrument> SaveAsync(PaymentInstrument value, long actor, CancellationToken ct)
         {
             if (value == null || actor <= 0 || value.Id < 0 || value.Type != "wallet" && value.Type != "card") throw new ArgumentException("وسيلة الدفع غير صحيحة.");
@@ -87,7 +88,7 @@ namespace AlKhayal.Application.Payments
         private static string Normalize(string value) { var b = new StringBuilder(); foreach (var ch in value.Normalize(NormalizationForm.FormKC).ToUpperInvariant()) if (!char.IsWhiteSpace(ch)) b.Append(ch); return b.ToString(); }
         public Task<PaymentHistoryPage> HistoryAsync(PaymentHistoryQuery q, CancellationToken ct)
         {
-            if (q == null || q.Page < 1 || q.Page > 1000000 || q.PageSize < 1 || q.PageSize > 100 || q.InstrumentId <= 0 || q.CashierId <= 0 || q.Status != null && q.Status != "posted" && q.Status != "returned" && q.Status != "canceled") throw new ArgumentException("مرشحات السجل غير صحيحة.");
+            if (q == null || q.Page < 1 || q.Page > 1000000 || q.PageSize < 1 || q.PageSize > 100 || q.InvoiceId <= 0 || q.InstrumentId <= 0 || q.CashierId <= 0 || q.Status != null && q.Status != "posted" && q.Status != "returned" && q.Status != "canceled") throw new ArgumentException("مرشحات السجل غير صحيحة.");
             foreach (var text in new[] { q.From, q.To }) { DateTime date; if (text != null && !DateTime.TryParseExact(text,"yyyy-MM-dd",CultureInfo.InvariantCulture,DateTimeStyles.None,out date)) throw new ArgumentException("التاريخ غير صحيح."); }
             if (q.From != null && q.To != null && string.CompareOrdinal(q.From,q.To)>0) throw new ArgumentException("راجع نطاق التاريخ.");
             return _store.HistoryAsync(q, ct);

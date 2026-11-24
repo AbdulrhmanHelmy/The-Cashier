@@ -1,5 +1,6 @@
 using System;
 using System.Data.SQLite;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -37,18 +38,21 @@ namespace AlKhayal.IntegrationTests
         [Fact]
         public async Task Every_supported_category_uses_persisted_rows_balances_and_related_records()
         {
+            var businessDate=DateTime.Today;
+            var asOfUtc=businessDate.AddHours(12).ToUniversalTime();
+            var lotExpiry=businessDate.AddDays(19).ToString("yyyy-MM-dd",CultureInfo.InvariantCulture);
             var zero=await Product("zero-stock","5");
             var reorder=await Product("reorder-stock","10");
             await Receive(reorder.Id,1,"6","reorder-receipt");
             var expiring=await Product("expiring-batch",null);
             EnableExpiry(expiring.Id);
-            await Receive(expiring.Id,1,"2","expiry-first","LOT-1","2026-11-20");
+            await Receive(expiring.Id,1,"2","expiry-first","LOT-1",lotExpiry);
             var second=await _inventory.SaveWarehouseAsync(new WarehouseCommand{Code="ALERT-W2",Name="مخزن تنبيهات ثان",IsActive=true},true,Ct);
             Assert.True(second.Succeeded,second.ErrorMessage);
-            await Receive(expiring.Id,second.Value.Id,"1","expiry-second","LOT-1","2026-11-20");
+            await Receive(expiring.Id,second.Value.Id,"1","expiry-second","LOT-1",lotExpiry);
             var installment=CreateInstallments(expiring.Id);
 
-            var rows=await Store().ActiveAsync(1,AsOfUtc,Ct);
+            var rows=await Store().ActiveAsync(1,asOfUtc,Ct);
             Assert.Equal(1,rows.Count(x=>x.Type=="low-stock"));
             Assert.Equal(zero.Id,rows.Single(x=>x.Type=="low-stock").RelatedId);
             Assert.Equal("product-edit",rows.Single(x=>x.Type=="low-stock").RelatedRoute);
@@ -73,7 +77,7 @@ namespace AlKhayal.IntegrationTests
 
             await Issue(expiring.Id,1,"2","expiry-issue-first","LOT-1");
             await Issue(expiring.Id,second.Value.Id,"1","expiry-issue-second","LOT-1");
-            Assert.DoesNotContain(await Store().ActiveAsync(1,AsOfUtc,Ct),x=>x.Type=="expiry");
+            Assert.DoesNotContain(await Store().ActiveAsync(1,asOfUtc,Ct),x=>x.Type=="expiry");
         }
 
         [Fact]

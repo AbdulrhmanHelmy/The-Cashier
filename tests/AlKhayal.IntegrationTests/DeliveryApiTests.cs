@@ -320,6 +320,96 @@ namespace AlKhayal.IntegrationTests
             }
         }
 
+        [Fact]
+        public async Task Delivery_twenty_posted_orders_can_be_corrected_and_reopened_by_persisted_identity()
+        {
+            using (var f = new SalesTreasuryTests.Fixture())
+            {
+                await f.Prepare(openShift: false);
+                var password = Guid.NewGuid().ToString("N");
+                await new SqliteUserStore(f.Db.ConnectionString).CreateAsync(
+                    "delivery-repeat", "مدير الاختبار", new PasswordHasher().Hash(password),
+                    UserRoles.Administrator, CancellationToken.None);
+                var today = DateTime.Today.ToString("yyyy-MM-dd");
+                long customer;
+                using (var connection = f.Db.Open())
+                    customer = connection.ExecuteScalar<long>(@"INSERT INTO Customers
+                        (Code,Name,Phone,Address,Balance,CreditLimit,Subscription,Status,CreatedAt,UpdatedAt)
+                        VALUES('REPEAT-DEL','عميل تجريبي','0101234','عنوان',0,1000,'أساسي','نشط',@Today,@Today);
+                        SELECT last_insert_rowid();", new { Today = today });
+                var url = DeliveryUrl();
+                var options = new HostOptions
+                {
+                    DatabasePath = f.Db.DatabasePath,
+                    FrontendPath = DeliveryFrontend(f.Db.DatabasePath),
+                    Url = url.ToString().TrimEnd('/')
+                };
+                var correctedIds = new long[20];
+                using (var server = new AlKhayalServer(new TestLicenseGate()))
+                using (var client = Client(url))
+                {
+                    server.Start(options);
+                    var csrf = await Login(client, "delivery-repeat", password);
+                    async Task<JToken> Write(HttpMethod method, string route, object body, HttpStatusCode expected = HttpStatusCode.OK)
+                    {
+                        using (var response = await Send(client, method, route, body, csrf))
+                        {
+                            var json = await response.Content.ReadAsStringAsync();
+                            Assert.True(expected == response.StatusCode, route + ": " + json);
+                            return JObject.Parse(json)["data"];
+                        }
+                    }
+                    await Write(HttpMethod.Post, "api/workforce/shifts/open", new { amount = "0", operationKey = "repeat-shift" });
+                    var driver = await Write(HttpMethod.Post, "api/delivery/drivers", new {name = "طيار تجريبي", phone = "0112345", isActive = true});
+                    for (var i = 0; i < correctedIds.Length; i++)
+                    {
+                        var driverId = i % 2 == 0 ? (long?)driver["id"] : null;
+                        object Sale(string address, long? expectedVersion = null) => new
+                        {
+                            customerId = customer, warehouseId = 1, invoiceDate = today, paymentMode = "cash",
+                            expectedVersion, discount = "0.00",
+                            delivery = new {driverId, primaryPhone = "0101234", address, fee = "2.50"},
+                            lines = new[] {new {variantId = f.Variant, productUnitId = f.Unit, quantity = "1", unitPrice = "12.34", discount = "0.00"}}
+                        };
+                        var initial = await Write(HttpMethod.Post, "api/sales/drafts", Sale("عنوان أول " + i), HttpStatusCode.Created);
+                        var id = (long)initial["id"];
+                        var posted = await Write(HttpMethod.Post, "api/sales/" + id + "/post", new {operationKey = "repeat-post-" + i});
+                        var reopened = JObject.Parse(await client.GetStringAsync("api/sales/" + id))["data"];
+                        Assert.Equal(id, (long)reopened["id"]);
+                        Assert.True((bool)reopened["canEditPosted"]);
+                        var version = (long)reopened["version"];
+                        var correction = await Write(HttpMethod.Post, "api/sales/" + id + "/corrections", new
+                        {
+                            expectedVersion = version, operationKey = "repeat-correction-" + i,
+                            settlementKind = "none", invoice = Sale("عنوان معدل " + i, version)
+                        });
+                        correctedIds[i] = (long)correction["invoice"]["id"];
+                        Assert.NotEqual(id, correctedIds[i]);
+                        var current = JObject.Parse(await client.GetStringAsync("api/sales/" + correctedIds[i]))["data"];
+                        Assert.Equal("عنوان معدل " + i, (string)current["delivery"]["address"]);
+                        Assert.Equal(driverId, (long?)current["delivery"]["driverId"]);
+                        Assert.Equal((long)posted["totalScaled"], (long)current["totalScaled"]);
+                        var status = new[] {"pending", "out_for_delivery", "delivered", "failed"}[i % 4];
+                        await Write(HttpMethod.Post, "api/delivery/orders/" + correctedIds[i] + "/status", new {status});
+                        var orders = JObject.Parse(await client.GetStringAsync("api/delivery/orders?search=" + current["invoiceNumber"] + "&status=" + status))["data"];
+                        Assert.Equal(correctedIds[i], (long)Assert.Single((JArray)orders["items"])["salesInvoiceId"]);
+                    }
+                }
+                Assert.Equal(20, correctedIds.Distinct().Count());
+                using (var server = new AlKhayalServer(new TestLicenseGate()))
+                using (var client = Client(url))
+                {
+                    server.Start(options);
+                    await Login(client, "delivery-repeat", password);
+                    for (var i = 0; i < correctedIds.Length; i++)
+                    {
+                        var reopened = JObject.Parse(await client.GetStringAsync("api/sales/" + correctedIds[i]))["data"];
+                        Assert.Equal("عنوان معدل " + i, (string)reopened["delivery"]["address"]);
+                    }
+                }
+            }
+        }
+
         private static string DeliveryFrontend(string databasePath)
         {
             var frontend=Path.Combine(Path.GetDirectoryName(databasePath),"delivery-frontend");Directory.CreateDirectory(Path.Combine(frontend,"data"));

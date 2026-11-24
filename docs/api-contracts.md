@@ -1,5 +1,9 @@
 # API contracts
 
+`GET /api/settings/general` includes `showCashChangeCalculator`, defaulting to true. Administrators update it through the existing general settings PUT. Omitting it from a PUT preserves the stored value.
+
+Header and Settings Global Search use bounded, same-origin reads. The [coverage table](global-search-coverage.md) lists the query fields, API routes and applicable grants. New directory search endpoints return record identities and display labels, with source-specific context used to open the selected record.
+
 New posted sales persist actual and estimated cost parts. `GET /api/reports/net-profit` exposes `estimatedCogs`; product-profit summary and rows expose `estimatedCost`. These four-place decimal strings are null when cost evidence is incomplete. The net-profit value is operating profit for recorded sales and included expense vouchers, not business-wide profit. See [sale cost and profit scope](estimated-sale-profit.md).
 
 ## Cashier sale-price permission
@@ -303,6 +307,8 @@ Catalog product details expose optional units[].salePrice; catalog configuration
 `GET /api/purchases/{id}` is the read-only source for the `purchase-details` screen. It accepts saved drafts and posted invoices. The screen route receives the exact `invoiceId` from purchase lists and stock movement `documentId` references; the editor route remains limited to drafts. The response includes the saved invoice total and line prices, original settlement mode, warehouse, supplier, creator name, and available tracking information. It does not expose a live per-invoice payment allocation or current payable balance; those figures must not be inferred from the original settlement mode.
 Barcode printer assignment: `PUT /api/labels/printer-assignment` (administrator, session and CSRF) accepts `{ version, printerName, paperName?, widthMm?, heightMm? }`. The active Windows paper is used when `paperName` is omitted. An explicit supported form or paired one-time width/height override can be saved. The response is the versioned `LabelSettings`. `GET /api/printing/printers` now reports `activePaper`, `dpiX`, `dpiY`, `landscape`, `printableWidthMm`, `printableHeightMm`, hard margins and a best-effort status alongside supported forms; these are driver reports, not physical media detection. `GET /api/labels/product-info/{barcodeId}?format=code128|ean13` returns the authoritative saved barcode and label fields for the compact Product Directory dialog. `POST /api/labels/jobs` accepts `exactQuantity: true` for Product Directory, which ignores profile batch copies while preserving application-level copy expansion for ordinary batches.
 
+`PUT /api/labels/design` requires an administrator session and CSRF token. It accepts `{ version, elements }` and returns the updated `LabelSettings` with its saved `design`. Each ordered element supplies `key`, `visible`, `fontSize` (5–36 pt in quarter-point increments), `alignment`, and optional `bold` and `text`. A visible `barcode` is required for customization. Send `elements: null` to reset the design while retaining the printer and stock. `POST /api/labels/design/preview` accepts the same draft plus an optional `stockOverride` with `printerName`, `widthMm`, and `heightMm`, and returns `{ pngBase64 }` with sample data. Preview does not write settings or create a print job.
+
 ## Saved document preview
 
 `POST /api/printing/preview/document` accepts `{ template, documentType, documentId }` from an authenticated administrator with a valid CSRF token. It validates the draft template, loads a posted document through `IPrintDocumentProvider`, and returns `{ success, data: { pngBase64, message }, error }`. Missing or inaccessible documents return `not_found`; it never submits a print job or changes the saved template. The preview uses the same native renderer as physical printing. The caller must label sample and actual previews distinctly.
@@ -320,3 +326,19 @@ Stock-entry requests for an expiry-tracked product send `expirationDate` and qua
 # Inventory movement source display
 
 The existing paged `GET /api/inventory/movements` response now includes nullable `sourceInvoiceType` (`purchase` or `sale`), `sourceInvoiceId`, and `sourceInvoiceNumber` on each movement. The store resolves these from saved invoice records in the page query. `notes`, document IDs, filters, paging, and reversal semantics remain unchanged. Clients should show the saved invoice number only when resolved; a missing source record must be described without inventing a number.
+
+### Invoice history pages
+
+`GET /api/sales/page` accepts `search`, a one-based `page` (default 1), and `pageSize` (25, 50, 100, or 200, default 50). It returns `items`, `totalCount`, `page`, and `pageSize`. Search matches the visible invoice number or customer name across all visible invoices. Results are ordered by descending invoice ID.
+
+`GET /api/purchases/page` accepts a one-based `page` (default 1) and returns `items`, `totalCount`, and `page` with a fixed size of 50. Results are ordered by descending invoice date and ID. Both routes clamp a page beyond the end to the final page and report page 1 for empty results. Existing collection, detail, and export routes retain their contracts.
+
+`GET /api/returns/page` accepts `search`, a one-based `page`, and `pageSize` of 25, 50, 100, or 200 (default 50). It returns `items`, `totalCount`, `page`, and `pageSize`. Search covers return number, original invoice number, and party. History order is descending creation time, return type, then descending ID.
+
+`GET /api/expenses/vouchers/page` accepts a one-based `page` and returns a fixed 50-row page with `items`, `totalCount`, and `page`, ordered by descending voucher ID. Both endpoints adjust out-of-range requests to the last page and retain their existing permissions and compatibility routes.
+
+`GET /api/customers/page` requires customer-directory access. It accepts `search`, a one-based `page`, `pageSize` of 25, 50, 100 or 200, `sort` and `descending`. The default is 50 customers in ascending code order. It returns `items`, `page`, `pageSize` and `totalCount`.
+
+`GET /api/customers/{id}/statement` accepts optional `page` and `pageSize`. When paging is requested, period totals and balances cover the full matching ledger, and running balances include movements before the current page. The synthetic opening row appears only on page 1 and is excluded from `totalCount`. Existing callers that omit `page` keep the full statement behavior.
+
+`GET /api/workforce/advances/history` accepts optional `employeeId` and one-based `page`. `GET /api/workforce/payroll/history` accepts `employeeId`, `period` and one-based `page`. Both use fixed 50-row history pages and existing workforce access checks. Payroll additionally returns `pendingAdvance` and `alreadyPaid` for the selected employee and period, calculated independently of the history page.

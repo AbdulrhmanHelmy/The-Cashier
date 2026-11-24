@@ -69,7 +69,8 @@
         '<div class="database-info"><dl><dt>آخر نسخة ناجحة</dt><dd>' + U.escape(last ? date(last.createdUtc) + " · " + last.name : "—") + '</dd>' +
         '<dt>آخر فشل</dt><dd>' + U.escape(status.lastFailureUtc ? date(status.lastFailureUtc) + " · " + status.lastError : "—") +
         '</dd></dl></div></div></section>' +
-        '<section class="card"><div class="card-head"><h2>النسخ المتاحة في المجلد</h2></div><div class="card-body">' +
+        '<section class="card"><div class="card-head"><h2>النسخ المتاحة في مجلد النسخ المُعد</h2></div><div class="card-body">' +
+        '<p class="muted">يعرض هذا السجل ملفات المجلد التالي فقط: <bdi dir="ltr">' + U.escape(config.directory) + '</bdi></p>' +
         (status.files.length ? '<div class="table-wrap"><table class="data-table"><thead><tr><th>الملف</th><th>تاريخ الملف</th>' +
           '<th>الحجم (بايت)</th><th>الحالة</th></tr></thead><tbody>' + status.files.map(function (file) {
             return '<tr><td><a class="ltr" href="' + download(file.name) + '">' + U.escape(file.name) + '</a></td><td>' +
@@ -151,7 +152,11 @@
                 draw(status);
               } catch (error) { UI.toast(error.message, "warning"); }
               report("تم إنشاء النسخة والتحقق منها · " + file.path + " · " + U.number(file.size) + " بايت");
-              if (status && status.files.some(function (entry) { return entry.path === file.path; })) {
+              var listed = status && status.files.some(function (entry) { return entry.path === file.path; });
+              if (status && !listed) {
+                message.appendChild(document.createTextNode(" · لم يظهر هذا الملف في سجل مجلد النسخ المُعد. استخدم المسار المعروض أعلاه للوصول إليه على جهاز الخادم."));
+              }
+              if (listed) {
                 var link = document.createElement("a");
                 link.className = "button";
                 link.href = download(file.name);

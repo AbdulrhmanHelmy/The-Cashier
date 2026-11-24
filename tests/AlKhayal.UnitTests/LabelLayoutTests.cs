@@ -77,6 +77,43 @@ namespace AlKhayal.UnitTests
             File.WriteAllBytes(Path.Combine(AppContext.BaseDirectory, "label-preview-" + width + "x" + height + ".png"), data);
         }
         [Theory]
+        [InlineData(35, 25, "code128", "2912345678", false)]
+        [InlineData(35, 25, "code128", "2912345678", true)]
+        [InlineData(50, 30, "ean13", "4006381333931", false)]
+        [InlineData(60, 40, "ean13", "5901234123457", false)]
+        [InlineData(100, 50, "code128", "LONG-CODE-128-TEST-1234567890", false)]
+        public async Task Native_label_page_preserves_encoded_value(int width, int height, string format, string code, bool landscape)
+        {
+            var template = LabelService.BuiltIn("decode-preview", width, height);
+            if (landscape)
+            {
+                template.Stock.PageWidthMm = height;
+                template.Stock.PageHeightMm = width;
+                template.Stock.Landscape = true;
+            }
+            var batch = LabelService.Sample();
+            var label = batch.Items[0];
+            label.Quantity = 1;
+            label.Barcode = code;
+            label.Format = format;
+            label.Fields["productName"] = "منتج اختبار طويل لملصق الباركود باللغة العربية";
+            label.Fields["price"] = "12.50 ج.م";
+
+            var png = await new WindowsPrinterBackend(new NativePrintRenderer()).PreviewLabelsAsync(batch, template, CancellationToken.None);
+            using (var stream = new MemoryStream(png))
+            using (var image = new Bitmap(stream))
+            {
+                Assert.Equal((int)Math.Ceiling(width * 300 / 25.4), image.Width);
+                Assert.Equal((int)Math.Ceiling(height * 300 / 25.4), image.Height);
+                var decoded = new BarcodeReader { Options = { TryHarder = true } }.Decode(image);
+                Assert.NotNull(decoded);
+                Assert.Equal(code, decoded.Text);
+                Assert.Equal(format == "ean13" ? BarcodeFormat.EAN_13 : BarcodeFormat.CODE_128, decoded.BarcodeFormat);
+            }
+            File.WriteAllBytes(Path.Combine(AppContext.BaseDirectory, "stage3-label-" + width + "x" + height + (landscape ? "-landscape" : "") + ".png"), png);
+        }
+
+        [Theory]
         [InlineData("Tea")]
         [InlineData("شاي عربي")]
         [InlineData("شاي عربي English طويل جدًا للاختبار")]

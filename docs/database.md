@@ -1,5 +1,9 @@
 # Database
 
+The [supermarket simulation guide](../tools/TheCashier.Simulation/README.md) covers the development-only operational reset, staged validation, database lease, and recovery procedure.
+
+Migration 100 adds the enabled-by-default cash change calculator flag to the existing `ApplicationSettings` row for both fresh and upgraded databases.
+
 Migration 099 adds immutable `SalesInvoiceCostParts` and `SalesReturnEstimatedCosts` without rewriting historical posted invoices. Each part links an invoice line and its source inventory document line; actual parts also link the original FIFO allocation, while estimates retain the selected purchase-cost provenance or an explicit unknown basis. See [sale cost and profit scope](estimated-sale-profit.md).
 
 Migration 096 adds `UserSalePricePermissions`, an independent per-cashier manual invoice selling-price grant. Missing rows mean disabled. Administrator access is derived from role and is not changed by this table.
@@ -251,3 +255,5 @@ Migration 088 adds nullable ProductUnits.SellPriceScaled, in the catalog fixed s
 Expiry-tracked products require an expiry date on positive receipts, but no operator-entered batch number. The inventory store generates an opaque internal lot identity for each entry and retains historical `ProductBatches` and `BatchId` references. An entry keeps its expiry through transfers, adjustments, counts, sales, and reversals. No existing batch records or posted financial rows are rewritten.
 
 `SalesInvoiceStockEntries` records each invoice-line to inventory-document-line split and its base quantity. Sales use original FIFO stock-layer order, excluding expired and non-sellable layers. `SalesReturnCostAllocations.SourceMovementId` identifies the original cost movement when several invoice allocations use one layer. Linked returns consume the invoice's remaining allocations by latest expiry first, then descending document-line ID, and restore original layer cost. Unallocated sales remain explicitly unallocated, with no invented expiry or cost. `InventoryCostLayers.IsSellable` separates damaged or expired returned stock from normal sale availability while retaining inventory value. Historical invoices without the new mapping continue through the legacy return path.
+
+Invoice history computes the matching count and page in one SQLite read snapshot. Sales uses the invoice rowid order and existing primary and unique keys for draft deletion and correction visibility. Migration `101_purchase_invoice_paging.sql` adds `IX_PurchaseInvoices_InvoiceDate_Id` for the cross-supplier purchase history order. The migration adds an index without rewriting invoice rows.

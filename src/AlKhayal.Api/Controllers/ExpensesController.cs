@@ -32,6 +32,27 @@ namespace AlKhayal.Api.Controllers
         [HttpGet, Route("vouchers")]
         public Task<IHttpActionResult> Vouchers(CancellationToken ct) => Run(new[] { "expense-add" }, false,
             async user => Ok(ApiEnvelope<IReadOnlyList<ExpenseVoucher>>.Ok(await _expenses.VouchersAsync(ct).ConfigureAwait(false))), ct);
+        [HttpGet, Route("vouchers/page")]
+        public Task<IHttpActionResult> VoucherPage(CancellationToken ct, long page = 1) => Run(new[] { "expense-add" }, false,
+            async user => Ok(ApiEnvelope<ExpenseVoucherPage>.Ok(await _expenses.VoucherPageAsync(page, ct).ConfigureAwait(false))), ct);
+
+        [HttpGet, Route("vouchers/directory-search")]
+        public Task<IHttpActionResult> SearchVouchers(CancellationToken ct, string query = "") =>
+            Run(new[] { "expense-add" }, false, async user =>
+            {
+                var rows = await _expenses.SearchVouchersAsync(query, ct).ConfigureAwait(false);
+                return Ok(ApiEnvelope<object>.Ok(rows.Select(x => new { x.Id, x.Number, x.CategoryName, x.Payee })));
+            }, ct);
+
+        [HttpGet, Route("vouchers/{id:long}")]
+        public Task<IHttpActionResult> GetVoucher(long id, CancellationToken ct) =>
+            Run(new[] { "expense-add" }, false, async user =>
+            {
+                var row = await _expenses.GetVoucherAsync(id, ct).ConfigureAwait(false);
+                return row == null ? Content(HttpStatusCode.NotFound, ApiEnvelope<object>.Fail("not_found", "لا يمكن فتح هذا السجل."))
+                    : (IHttpActionResult)Ok(ApiEnvelope<ExpenseVoucher>.Ok(row));
+            }, ct);
+
         [HttpPost, Route("vouchers")]
         public Task<IHttpActionResult> Post(ExpenseCommand command, CancellationToken ct) => Run(new[] { "expense-add" }, true,
             async user => Content(HttpStatusCode.Created, ApiEnvelope<ExpenseVoucher>.Ok(await _expenses.PostAsync(command, user.Id, ct).ConfigureAwait(false))), ct);

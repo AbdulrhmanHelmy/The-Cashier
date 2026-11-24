@@ -17,6 +17,8 @@ namespace AlKhayal.UnitTests
             public long Actor, Amount, Version;
             public TreasuryMovementCommand Movement;
             public Task<IReadOnlyList<TreasuryAccount>> ListAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<TreasuryAccount>>(new[] { new TreasuryAccount { Id=1,Type="cash",BalanceScaled=1000000 },new TreasuryAccount { Id=2,Type="bank",BalanceScaled=2500000 } });
+            public Task<IReadOnlyList<TreasuryAccount>> SearchAccountsAsync(string query, long? id, CancellationToken ct) =>
+                Task.FromResult<IReadOnlyList<TreasuryAccount>>(Array.Empty<TreasuryAccount>());
             public Task<InstallmentReceivableSummary> GetInstallmentReceivableAsync(CancellationToken ct) => Task.FromResult(new InstallmentReceivableSummary { DebitTotalScaled=3000000,CreditTotalScaled=1000000,BalanceScaled=2000000 });
             public Task<TreasuryAccount> SaveAsync(long? id,TreasuryAccountCommand command,string normalizedCode,long userId,CancellationToken ct)
             { Saved=command;Code=normalizedCode;Id=id;Actor=userId;return Task.FromResult(new TreasuryAccount { Id=id??9,Code=command.Code,Name=command.Name,Type=command.Type,Notes=command.Notes,Version=command.Version }); }

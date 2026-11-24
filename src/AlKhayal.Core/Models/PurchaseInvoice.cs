@@ -33,6 +33,13 @@ namespace AlKhayal.Core.Models
         public List<PurchaseInvoiceLine> Lines { get; set; } = new List<PurchaseInvoiceLine>();
     }
 
+    public sealed class PurchaseInvoicePage
+    {
+        public System.Collections.Generic.IReadOnlyList<PurchaseInvoice> Items { get; set; }
+        public long TotalCount { get; set; }
+        public long Page { get; set; }
+    }
+
     public sealed class PurchaseInvoiceLine
     {
         public long Id { get; set; }

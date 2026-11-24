@@ -1,5 +1,13 @@
 namespace AlKhayal.Core.Models
 {
+    public sealed class CustomerPage
+    {
+        public System.Collections.Generic.IReadOnlyList<Customer> Items { get; set; }
+        public long TotalCount { get; set; }
+        public long Page { get; set; }
+        public int PageSize { get; set; }
+    }
+
     public sealed class Customer
     {
         public long Id { get; set; }

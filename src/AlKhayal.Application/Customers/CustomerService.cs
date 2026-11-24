@@ -13,6 +13,13 @@ namespace AlKhayal.Application.Customers
         private readonly ICustomerRepository _customers;
         public CustomerService(ICustomerRepository customers) { _customers = customers; }
 
+        public Task<CustomerPage> ListPageAsync(string search, long page, int pageSize, string sort, bool descending, CancellationToken ct)
+        {
+            if (page < 1 || (pageSize != 25 && pageSize != 50 && pageSize != 100 && pageSize != 200))
+                throw new ArgumentException("رقم الصفحة أو حجمها غير صالح.");
+            return _customers.ListPageAsync((search ?? "").Trim(), page, pageSize, sort, descending, ct);
+        }
+
         public List<Customer> GetAll() { return _customers.GetAll(); }
         public Task<IReadOnlyList<Customer>> SearchAsync(string query, CancellationToken ct) { return _customers.SearchAsync((query ?? string.Empty).Trim(), 20, ct); }
         public Customer GetById(long id) { return _customers.GetById(id); }

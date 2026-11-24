@@ -22,7 +22,7 @@ namespace AlKhayal.Data.Settings
         public async Task<GeneralSettings> GetGeneralAsync(CancellationToken ct)
         {
             using (var connection = new SQLiteConnection(_connectionString))
-                return await connection.QuerySingleAsync<GeneralSettings>(new CommandDefinition("SELECT LanguageCode, DateFormat, TimeFormat, UseGroupSeparators, CurrencyCode, CurrencySymbol, DecimalPrecision, TaxEnabled, DefaultTaxRate, PricesIncludeTax, UpdatedUtc FROM ApplicationSettings WHERE Id=1", cancellationToken: ct)).ConfigureAwait(false);
+                return await connection.QuerySingleAsync<GeneralSettings>(new CommandDefinition("SELECT LanguageCode, DateFormat, TimeFormat, UseGroupSeparators, CurrencyCode, CurrencySymbol, DecimalPrecision, TaxEnabled, DefaultTaxRate, PricesIncludeTax, ShowCashChangeCalculator, UpdatedUtc FROM ApplicationSettings WHERE Id=1", cancellationToken: ct)).ConfigureAwait(false);
         }
 
         public async Task<CompanyProfile> UpdateCompanyAsync(UpdateCompanyProfileCommand command, CancellationToken ct)
@@ -49,7 +49,7 @@ namespace AlKhayal.Data.Settings
                 using (var transaction = connection.BeginTransaction())
                 {
                     var now = DateTime.UtcNow.ToString("o");
-                    await connection.ExecuteAsync(new CommandDefinition("UPDATE ApplicationSettings SET LanguageCode=@LanguageCode, DateFormat=@DateFormat, TimeFormat=@TimeFormat, UseGroupSeparators=@UseGroupSeparators, CurrencyCode=@CurrencyCode, CurrencySymbol=@CurrencySymbol, DecimalPrecision=@DecimalPrecision, TaxEnabled=@TaxEnabled, DefaultTaxRate=@DefaultTaxRate, PricesIncludeTax=@PricesIncludeTax, UpdatedUtc=@Now, ChangedByUserId=@ChangedByUserId WHERE Id=1", new { command.LanguageCode, command.DateFormat, command.TimeFormat, command.UseGroupSeparators, command.CurrencyCode, command.CurrencySymbol, command.DecimalPrecision, command.TaxEnabled, command.DefaultTaxRate, command.PricesIncludeTax, Now = now, command.ChangedByUserId }, transaction, cancellationToken: ct)).ConfigureAwait(false);
+                    await connection.ExecuteAsync(new CommandDefinition("UPDATE ApplicationSettings SET LanguageCode=@LanguageCode, DateFormat=@DateFormat, TimeFormat=@TimeFormat, UseGroupSeparators=@UseGroupSeparators, CurrencyCode=@CurrencyCode, CurrencySymbol=@CurrencySymbol, DecimalPrecision=@DecimalPrecision, TaxEnabled=@TaxEnabled, DefaultTaxRate=@DefaultTaxRate, PricesIncludeTax=@PricesIncludeTax, ShowCashChangeCalculator=COALESCE(@ShowCashChangeCalculatorOverride, ShowCashChangeCalculator), UpdatedUtc=@Now, ChangedByUserId=@ChangedByUserId WHERE Id=1", new { command.LanguageCode, command.DateFormat, command.TimeFormat, command.UseGroupSeparators, command.CurrencyCode, command.CurrencySymbol, command.DecimalPrecision, command.TaxEnabled, command.DefaultTaxRate, command.PricesIncludeTax, command.ShowCashChangeCalculatorOverride, Now = now, command.ChangedByUserId }, transaction, cancellationToken: ct)).ConfigureAwait(false);
                     await Audit(connection, transaction, "general", "currency/tax/display settings updated", command.ChangedByUserId, now, ct).ConfigureAwait(false);
                     transaction.Commit();
                 }

@@ -166,12 +166,21 @@ namespace AlKhayal.Application.Sales
     public sealed class SaleReturnSummary { public long Id { get; set; } public string ReturnNumber { get; set; } public long TotalScaled { get; set; } public long CashRefundScaled { get; set; } public long CreditReductionScaled { get; set; } public string Reason { get; set; } public string CreatedUtc { get; set; } }
     public sealed class ElectronicRefundConfirmation { public string OperationKey { get; set; } public string ExternalReference { get; set; } }
     public sealed class ElectronicRefundResult { public bool Succeeded { get; set; } public bool Replayed { get; set; } public string ErrorCode { get; set; } public string ErrorMessage { get; set; } public long ReturnId { get; set; } }
+    public sealed class SaleInvoicePage
+    {
+        public IReadOnlyList<SaleInvoice> Items { get; set; }
+        public long TotalCount { get; set; }
+        public long Page { get; set; }
+        public int PageSize { get; set; }
+    }
+
     public interface ISalesStore
     {
         Task<SaleInvoice> CreateDraftAsync(SaleDraftCommand command,long subtotal,long discount,long tax,long total,long userId,CancellationToken ct);
         Task<SaleInvoice> UpdateDraftAsync(long id,SaleDraftCommand command,long subtotal,long discount,long tax,long total,long userId,CancellationToken ct);
         Task<SaleInvoice> GetAsync(long id,CancellationToken ct);
-        Task<IReadOnlyList<SaleInvoice>> ListAsync(string search,string from,string to,CancellationToken ct);
+        Task<SaleInvoicePage> ListPageAsync(string search, long page, int pageSize, CancellationToken ct);
+        Task<IReadOnlyList<SaleInvoice>> ListAsync(string search,string from,string to,CancellationToken ct,int? searchLimit=null);
         Task<long> CountSuspendedAsync(CancellationToken ct);
         Task<SalePostResult> PostAsync(long id,long version,string key,string hash,long userId,CancellationToken ct);
         Task<InstallmentSaleResult> CreateInstallmentAsync(InstallmentSaleCommand command,long subtotal,long discount,long downPayment,long userId,CancellationToken ct);
